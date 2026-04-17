@@ -1,0 +1,577 @@
+/* styles/global.css
+   All the app's styles live here. Kept as plain CSS (no SCSS or
+   CSS-in-JS) because it's easier to scan and edit.
+
+   Color tokens up top, then components in roughly top-to-bottom
+   order: app shell → wallet → form → detail → barcode → toast.
+*/
+
+:root {
+  --mint: #BADDCF;
+  --cream: #E8F3DA;
+  --sky: #6787AF;
+  --ink: #19123D;
+  --lime: #B2F332;
+  --bone: #F3EEE8;
+  --ink-60: rgba(25, 18, 61, 0.6);
+  --ink-40: rgba(25, 18, 61, 0.4);
+  --ink-15: rgba(25, 18, 61, 0.12);
+  --ink-08: rgba(25, 18, 61, 0.06);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Inter, system-ui, sans-serif;
+  background: var(--bone);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+button { cursor: pointer; border: none; background: none; padding: 0; }
+
+/* ---- App shell ---- */
+.pw-app {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bone);
+  position: relative;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pw-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* ---- Wallet screen ---- */
+.pw-header {
+  padding: 28px 24px 16px;
+  padding-top: calc(env(safe-area-inset-top) + 20px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.pw-title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0;
+  line-height: 1;
+}
+
+.pw-subtitle {
+  font-size: 14px;
+  color: var(--ink-60);
+  margin: 6px 0 0;
+}
+
+.pw-add-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bone);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+.pw-add-btn:active { transform: scale(0.92); }
+
+.pw-cards {
+  flex: 1;
+  padding: 8px 20px 100px;
+  overflow-y: auto;
+}
+
+/* Card in wallet list */
+.pw-card {
+  position: relative;
+  border-radius: 20px;
+  padding: 22px 22px 20px;
+  margin-bottom: 14px;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: transform 0.18s;
+  overflow: hidden;
+  border: 1px solid rgba(25, 18, 61, 0.06);
+  box-shadow:
+    0 1px 2px rgba(25, 18, 61, 0.04),
+    0 6px 16px rgba(25, 18, 61, 0.05);
+}
+.pw-card:active { transform: scale(0.98); }
+.pw-card::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 50%;
+  background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,0.08) 60%, rgba(255,255,255,0.18) 100%);
+  pointer-events: none;
+}
+
+.pw-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.pw-monogram {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.pw-merchant {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.pw-card-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  position: relative;
+  z-index: 1;
+  gap: 12px;
+}
+
+.pw-card-num {
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+}
+
+.pw-card-bal {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-align: right;
+}
+
+.pw-card-bal-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+  margin-bottom: 2px;
+}
+
+/* ---- Empty state ---- */
+.pw-empty {
+  text-align: center;
+  padding: 48px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.pw-empty-illo {
+  width: 120px;
+  height: 120px;
+  border-radius: 32px;
+  background: var(--mint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pw-empty-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.pw-empty-body {
+  font-size: 15px;
+  color: var(--ink-60);
+  margin: 0;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+.pw-empty-cta {
+  background: var(--ink);
+  color: var(--bone);
+  padding: 14px 24px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  margin-top: 8px;
+  transition: transform 0.15s;
+}
+.pw-empty-cta:active { transform: scale(0.96); }
+
+/* ---- Form screen ---- */
+.pw-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 12px;
+  padding-top: calc(env(safe-area-inset-top) + 16px);
+}
+
+.pw-nav {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 500;
+  padding: 8px 0;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.pw-nav.primary { font-weight: 600; justify-content: flex-end; }
+.pw-nav:disabled { color: var(--ink-40); cursor: not-allowed; }
+
+.pw-form-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.pw-form-body {
+  padding: 20px 20px 40px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.pw-group {
+  background: #fff;
+  border-radius: 14px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.pw-field {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 0.5px solid var(--ink-15);
+}
+.pw-field:last-child { border-bottom: none; }
+
+.pw-field label {
+  font-size: 12px;
+  color: var(--ink-60);
+  font-weight: 500;
+}
+
+.pw-field input,
+.pw-field textarea {
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0;
+  font-size: 16px;
+  color: var(--ink);
+  width: 100%;
+  font-weight: 500;
+}
+
+.pw-field input::placeholder,
+.pw-field textarea::placeholder {
+  color: var(--ink-40);
+  font-weight: 400;
+}
+
+.pw-field textarea {
+  resize: none;
+  min-height: 60px;
+}
+
+.pw-hint {
+  font-size: 12px;
+  color: var(--ink-60);
+  padding: 8px 18px 0;
+  line-height: 1.4;
+}
+
+/* ---- Detail screen ---- */
+.pw-detail-hero { padding: 16px 20px 24px; }
+
+.pw-detail-card {
+  border-radius: 28px;
+  padding: 28px 26px 26px;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(25, 18, 61, 0.06);
+  box-shadow:
+    0 1px 2px rgba(25, 18, 61, 0.04),
+    0 8px 20px rgba(25, 18, 61, 0.06);
+}
+.pw-detail-card::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 55%;
+  background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,0.08) 60%, rgba(255,255,255,0.2) 100%);
+  pointer-events: none;
+}
+
+.pw-detail-merchant {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.pw-detail-bal-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.75;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.pw-detail-bal {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.pw-section {
+  background: #fff;
+  border-radius: 14px;
+  margin: 0 20px 16px;
+  overflow: hidden;
+}
+
+.pw-row {
+  padding: 16px 18px;
+  border-bottom: 0.5px solid var(--ink-15);
+}
+.pw-row:last-child { border-bottom: none; }
+
+.pw-row-label {
+  font-size: 12px;
+  color: var(--ink-60);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.pw-row-value {
+  font-size: 17px;
+  font-weight: 500;
+  word-break: break-word;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.pw-notes-value {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: rgba(25, 18, 61, 0.9);
+}
+
+.pw-pin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pw-pin-mask {
+  font-size: 20px;
+  letter-spacing: 0.3em;
+  color: var(--ink-60);
+}
+
+.pw-pin-reveal {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sky);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--ink-08);
+  flex-shrink: 0;
+  transition: transform 0.15s, background 0.15s;
+}
+.pw-pin-reveal:active { transform: scale(0.94); }
+.pw-pin-reveal.active { background: var(--mint); color: var(--ink); }
+
+/* ---- Deduct / track spending ---- */
+.pw-deduct-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 14px;
+}
+
+.pw-deduct-input {
+  flex: 1;
+  border: 0.5px solid var(--ink-15);
+  background: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 500;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  transition: border 0.15s;
+}
+.pw-deduct-input:focus { border-color: var(--ink); }
+
+.pw-deduct-btn {
+  background: var(--ink);
+  color: var(--bone);
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 15px;
+  transition: transform 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+}
+.pw-deduct-btn:active { transform: scale(0.96); }
+.pw-deduct-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.pw-tx-list { border-top: 0.5px solid var(--ink-15); }
+
+.pw-tx-header {
+  font-size: 11px;
+  color: var(--ink-60);
+  font-weight: 500;
+  padding: 12px 18px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pw-tx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 0.5px solid var(--ink-08);
+}
+.pw-tx-row:last-child { border-bottom: none; }
+
+.pw-tx-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pw-tx-amount {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.pw-tx-date {
+  font-size: 12px;
+  color: rgba(25, 18, 61, 0.5);
+}
+
+.pw-tx-undo {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sky);
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--ink-08);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: transform 0.15s, background 0.15s;
+}
+.pw-tx-undo:active { transform: scale(0.94); }
+.pw-tx-undo:hover { background: rgba(25, 18, 61, 0.1); }
+
+/* ---- Barcode ---- */
+.pw-barcode {
+  background: #fff;
+  border-radius: 14px;
+  margin: 0 20px 24px;
+  padding: 24px 18px 20px;
+  text-align: center;
+}
+
+.pw-barcode-label {
+  font-size: 12px;
+  color: var(--ink-60);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+
+.pw-barcode-svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---- Delete button ---- */
+.pw-delete {
+  display: block;
+  margin: 8px auto 40px;
+  color: #B33;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 12px 20px;
+}
+
+/* ---- Toast ---- */
+.pw-toast {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
+  background: var(--ink);
+  color: var(--bone);
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: transform 0.3s;
+  z-index: 100;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.pw-toast.show { transform: translateX(-50%) translateY(0); }
