@@ -48,3 +48,4 @@ Vite is configured with `host: true`, so after `npm run dev` it prints two URLs 
 Cards are saved to `localStorage` under the key `pocket_wallet_cards_v1`. To clear everything: open browser dev tools → Application → Local Storage → delete that key, then refresh.
 
 On first load, three sample cards appear so the app isn't empty. Once you save, edit, or remove any card, those saves take over and sample data is never re-seeded.
+# stashly
