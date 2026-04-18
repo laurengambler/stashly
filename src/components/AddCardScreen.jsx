@@ -64,6 +64,11 @@ function LimitedStorageModal({ brand, onCancel, onContinue }) {
   )
 }
 
+const formatCardNumber = (value) => {
+  const digits = value.replace(/\D/g, '')
+  return digits.replace(/(.{4})(?=.)/g, '$1 ')
+}
+
 export default function AddCardScreen({ onCancel, onSave }) {
   const [merchant, setMerchant] = useState('')
   const [number, setNumber] = useState('')
@@ -96,7 +101,7 @@ export default function AddCardScreen({ onCancel, onSave }) {
       kind: CARD_KIND.MERCHANT_GIFT_CARD,
       brand: CARD_BRAND.UNKNOWN,
       merchant: merchant.trim(),
-      number: number.trim(),
+      number: number.replace(/\s/g, ''),
       pin: pin.trim(),
       balance: normalizedBalance,
       startingBalance,
@@ -176,7 +181,7 @@ export default function AddCardScreen({ onCancel, onSave }) {
             <input
               type="text"
               value={number}
-              onChange={(e) => setNumber(e.target.value)}
+              onChange={(e) => setNumber(formatCardNumber(e.target.value))}
               placeholder="Required"
               autoComplete="off"
             />
