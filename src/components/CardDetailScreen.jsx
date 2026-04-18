@@ -1,6 +1,8 @@
 // components/CardDetailScreen.jsx
 // The main "working" screen — shows one card with all its details,
-// the spending tracker, undo history, and the barcode.
+// the spending tracker, undo history, and (for merchant gift cards
+// only) the barcode. Open-loop prepaid cards render in a limited
+// reference view with no PAN, no PIN, and no barcode.
 
 import { useState, useMemo } from 'react'
 import Barcode from './Barcode.jsx'
@@ -12,6 +14,9 @@ import {
   relativeTime,
   haptic,
   txid,
+  isOpenLoopCard,
+  cardMaskedNumber,
+  CARD_BRAND,
 } from '../lib/helpers.js'
 
 // Sub-component: the spending tracker section.
@@ -142,6 +147,13 @@ function PinRow({ pin }) {
   )
 }
 
+// Short brand label for the reference notice on open-loop cards.
+const brandLabel = (brand) => {
+  if (brand === CARD_BRAND.VISA) return 'Visa'
+  if (brand === CARD_BRAND.MASTERCARD) return 'Mastercard'
+  return 'Prepaid'
+}
+
 export default function CardDetailScreen({
   card,
   theme,
@@ -152,6 +164,7 @@ export default function CardDetailScreen({
 }) {
   const balance = cardBalanceDisplay(card)
   const hasBalance = computeBalance(card) !== null
+  const openLoop = isOpenLoopCard(card)
 
   const handleDelete = () => {
     if (confirm('Remove ' + card.merchant + ' from your wallet?')) {
@@ -187,6 +200,9 @@ export default function CardDetailScreen({
           className="pw-detail-card"
           style={{ background: theme.bg, color: theme.text }}
         >
+          {openLoop && (
+            <span className="pw-badge pw-badge-on-card">Reference only</span>
+          )}
           <h3 className="pw-detail-merchant">{card.merchant}</h3>
           <div>
             <div className="pw-detail-bal-label">Balance</div>
@@ -194,6 +210,13 @@ export default function CardDetailScreen({
           </div>
         </div>
       </div>
+
+      {openLoop && (
+        <div className="pw-notice">
+          Limited visibility — for your security, Stashly only stores the last 4
+          digits of this card. No barcode is generated.
+        </div>
+      )}
 
       {hasBalance && (
         <SpendingTracker
@@ -213,9 +236,11 @@ export default function CardDetailScreen({
       <div className="pw-section">
         <div className="pw-row">
           <div className="pw-row-label">Card number</div>
-          <div className="pw-row-value">{formatNumber(card.number)}</div>
+          <div className="pw-row-value">
+            {openLoop ? cardMaskedNumber(card) : formatNumber(card.number)}
+          </div>
         </div>
-        <PinRow pin={card.pin} />
+        {!openLoop && <PinRow pin={card.pin} />}
       </div>
 
       {card.notes && (
@@ -227,10 +252,12 @@ export default function CardDetailScreen({
         </div>
       )}
 
-      <div className="pw-barcode">
-        <div className="pw-barcode-label">Scan at register</div>
-        <Barcode value={card.number} />
-      </div>
+      {!openLoop && (
+        <div className="pw-barcode">
+          <div className="pw-barcode-label">Scan at register</div>
+          <Barcode value={card.number} />
+        </div>
+      )}
 
       <button className="pw-delete" onClick={handleDelete}>
         Remove card

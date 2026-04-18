@@ -5,8 +5,9 @@
 import {
   themeAtPosition,
   monogram,
-  maskNumber,
   cardBalanceDisplay,
+  cardMaskedNumber,
+  isOpenLoopCard,
 } from '../lib/helpers.js'
 
 // A single card row in the list view. Receives its theme precomputed
@@ -14,6 +15,7 @@ import {
 // full sorted list (ombre gradient, top → bottom).
 function CardListItem({ card, theme, onOpen }) {
   const balance = cardBalanceDisplay(card)
+  const openLoop = isOpenLoopCard(card)
 
   return (
     <div
@@ -21,6 +23,9 @@ function CardListItem({ card, theme, onOpen }) {
       onClick={() => onOpen(card.id)}
       style={{ background: theme.bg, color: theme.text }}
     >
+      {openLoop && (
+        <span className="pw-badge pw-badge-on-card">Reference only</span>
+      )}
       <div className="pw-card-top">
         <div className="pw-monogram" style={{ background: theme.mono }}>
           {monogram(card.merchant)}
@@ -28,7 +33,7 @@ function CardListItem({ card, theme, onOpen }) {
         <h3 className="pw-merchant">{card.merchant}</h3>
       </div>
       <div className="pw-card-bottom">
-        <div className="pw-card-num">{maskNumber(card.number)}</div>
+        <div className="pw-card-num">{cardMaskedNumber(card)}</div>
         {balance && (
           <div>
             <div className="pw-card-bal-label">Balance</div>

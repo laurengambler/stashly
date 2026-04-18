@@ -1,10 +1,68 @@
 // components/AddCardScreen.jsx
 // The "add a card" form. Merchant + card number are required;
-// everything else is optional. Save button stays disabled until
-// the required fields are filled.
+// everything else is optional. On save, the entered number is run
+// through classifyCardNumber — if it matches a Visa or Mastercard
+// PAN, the user is routed to a limited-storage confirmation and the
+// saved card never contains the full number, PIN, expiration, or CVV.
 
 import { useState } from 'react'
-import { uid, balanceNumeric, balanceSymbol } from '../lib/helpers.js'
+import {
+  uid,
+  balanceNumeric,
+  balanceSymbol,
+  classifyCardNumber,
+  CARD_KIND,
+  CARD_BRAND,
+} from '../lib/helpers.js'
+
+// Inline confirmation shown when a Visa/Mastercard PAN is detected.
+// Continuing commits a limited-storage card; cancelling returns the
+// user to the form with every field intact so they can correct the
+// number if they entered the wrong one.
+function LimitedStorageModal({ brand, onCancel, onContinue }) {
+  const brandLabel =
+    brand === CARD_BRAND.VISA
+      ? 'Visa'
+      : brand === CARD_BRAND.MASTERCARD
+      ? 'Mastercard'
+      : 'prepaid'
+
+  return (
+    <div
+      className="pw-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pw-modal-title"
+    >
+      <div className="pw-modal">
+        <h3 id="pw-modal-title" className="pw-modal-title">
+          Heads up about this card
+        </h3>
+        <p className="pw-modal-body">
+  This is a Visa or Mastercard payment card, not a store gift card.
+
+  Stashly is built for gift cards, so we’ll save this one as a quick reference only. You can still keep track of it here, but it won’t work for scanning or checkout inside the app.
+</p>
+        <div className="pw-modal-actions">
+          <button
+            type="button"
+            className="pw-modal-btn primary"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="pw-modal-btn secondary"
+            onClick={onContinue}
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function AddCardScreen({ onCancel, onSave }) {
   const [merchant, setMerchant] = useState('')
@@ -13,20 +71,30 @@ export default function AddCardScreen({ onCancel, onSave }) {
   const [balance, setBalance] = useState('')
   const [notes, setNotes] = useState('')
 
+  // When non-null, the user is staring at the limited-storage modal.
+  // Holds the classification so Continue can persist without
+  // re-running the check.
+  const [pendingOpenLoop, setPendingOpenLoop] = useState(null)
+
   // Can only save once both required fields have content.
   const canSave = merchant.trim() && number.trim()
 
-  const handleSave = () => {
-    if (!canSave) return
+  // Build the normalized balance once — same logic used for both flows.
+  const buildBalanceFields = () => {
     const startingBalance = balanceNumeric(balance)
-    // Normalize the stored balance string so it looks consistent.
     const normalizedBalance =
       startingBalance !== null
         ? balanceSymbol(balance) + startingBalance.toFixed(2)
         : ''
+    return { startingBalance, normalizedBalance }
+  }
 
+  const saveMerchantCard = () => {
+    const { startingBalance, normalizedBalance } = buildBalanceFields()
     onSave({
       id: uid(),
+      kind: CARD_KIND.MERCHANT_GIFT_CARD,
+      brand: CARD_BRAND.UNKNOWN,
       merchant: merchant.trim(),
       number: number.trim(),
       pin: pin.trim(),
@@ -36,6 +104,40 @@ export default function AddCardScreen({ onCancel, onSave }) {
       notes: notes.trim(),
       createdAt: Date.now(),
     })
+  }
+
+  // Persist only the fields allowed for open-loop cards. The full PAN,
+  // PIN, expiration, and CVV are never written to app state or storage.
+  const saveOpenLoopCard = (classification) => {
+    const { startingBalance, normalizedBalance } = buildBalanceFields()
+    onSave({
+      id: uid(),
+      kind: CARD_KIND.OPEN_LOOP_PREPAID,
+      brand: classification.brand,
+      merchant: merchant.trim(),
+      last4: classification.last4,
+      balance: normalizedBalance,
+      startingBalance,
+      transactions: [],
+      notes: notes.trim(),
+      createdAt: Date.now(),
+    })
+  }
+
+  const handleSave = () => {
+    if (!canSave) return
+    const classification = classifyCardNumber(number)
+    if (classification.isOpenLoop) {
+      setPendingOpenLoop(classification)
+      return
+    }
+    saveMerchantCard()
+  }
+
+  const handleContinueLimited = () => {
+    if (!pendingOpenLoop) return
+    saveOpenLoopCard(pendingOpenLoop)
+    setPendingOpenLoop(null)
   }
 
   return (
@@ -121,6 +223,14 @@ export default function AddCardScreen({ onCancel, onSave }) {
           Stored only on this device. Nothing leaves your browser.
         </p>
       </div>
+
+      {pendingOpenLoop && (
+        <LimitedStorageModal
+          brand={pendingOpenLoop.brand}
+          onCancel={() => setPendingOpenLoop(null)}
+          onContinue={handleContinueLimited}
+        />
+      )}
     </div>
   )
 }

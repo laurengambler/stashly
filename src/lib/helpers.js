@@ -104,6 +104,125 @@ export const maskNumber = (num) => {
   return '•••• •••• •••• ' + x.slice(-4)
 }
 
+// --- Card classification ------------------------------------------
+// Stashly only handles closed-loop *merchant* gift cards fully. Open-
+// loop prepaid cards (real Visa/Mastercard networks) are accepted
+// under a reference-only flow that never persists the full PAN, PIN,
+// expiration, or CVV. These constants are the single source of truth
+// for that distinction across the app.
+
+export const CARD_KIND = {
+  MERCHANT_GIFT_CARD: 'merchant_gift_card',
+  OPEN_LOOP_PREPAID: 'open_loop_prepaid',
+}
+
+export const CARD_BRAND = {
+  VISA: 'visa',
+  MASTERCARD: 'mastercard',
+  UNKNOWN: 'unknown',
+}
+
+const digitsOnly = (s) => String(s == null ? '' : s).replace(/\D/g, '')
+
+// Luhn (mod-10) checksum — the standard validation used by every
+// real Visa/Mastercard PAN. Rejects short strings outright so we
+// don't false-positive on a 4-digit merchant code.
+export const luhnCheck = (num) => {
+  const s = digitsOnly(num)
+  if (s.length < 12) return false
+  let sum = 0
+  let alt = false
+  for (let i = s.length - 1; i >= 0; i--) {
+    let n = parseInt(s[i], 10)
+    if (alt) {
+      n *= 2
+      if (n > 9) n -= 9
+    }
+    sum += n
+    alt = !alt
+  }
+  return sum % 10 === 0
+}
+
+// BIN-prefix brand detection. Works on partial input so callers can
+// surface hints as the user types; length + Luhn are checked
+// separately by isOpenLoopPrepaid for confident classification.
+//   Visa         → starts with 4
+//   Mastercard   → starts with 51–55 or 2221–2720 (2-series)
+export const detectCardBrand = (num) => {
+  const s = digitsOnly(num)
+  if (!s) return CARD_BRAND.UNKNOWN
+  if (s[0] === '4') return CARD_BRAND.VISA
+  if (s.length >= 2) {
+    const first2 = parseInt(s.slice(0, 2), 10)
+    if (first2 >= 51 && first2 <= 55) return CARD_BRAND.MASTERCARD
+  }
+  if (s.length >= 4) {
+    const first4 = parseInt(s.slice(0, 4), 10)
+    if (first4 >= 2221 && first4 <= 2720) return CARD_BRAND.MASTERCARD
+  }
+  return CARD_BRAND.UNKNOWN
+}
+
+// True when the number matches a Visa/Mastercard BIN AND has a valid
+// network length AND passes Luhn. This is the gate that triggers the
+// limited-storage flow — conservative enough that a random 16-digit
+// merchant code starting with "4" won't reach it.
+export const isOpenLoopPrepaid = (num) => {
+  const brand = detectCardBrand(num)
+  if (brand === CARD_BRAND.UNKNOWN) return false
+  const s = digitsOnly(num)
+  const validLength =
+    brand === CARD_BRAND.VISA
+      ? s.length === 13 || s.length === 16 || s.length === 19
+      : s.length === 16
+  return validLength && luhnCheck(s)
+}
+
+// Extract the last 4 digits from any input. Safe on short/empty strings.
+export const lastFour = (num) => {
+  const s = digitsOnly(num)
+  return s.length >= 4 ? s.slice(-4) : s
+}
+
+// Classify a raw card number at save time.
+//   { brand, kind, isOpenLoop, last4 }
+export const classifyCardNumber = (num) => {
+  if (isOpenLoopPrepaid(num)) {
+    return {
+      brand: detectCardBrand(num),
+      kind: CARD_KIND.OPEN_LOOP_PREPAID,
+      isOpenLoop: true,
+      last4: lastFour(num),
+    }
+  }
+  return {
+    brand: CARD_BRAND.UNKNOWN,
+    kind: CARD_KIND.MERCHANT_GIFT_CARD,
+    isOpenLoop: false,
+    last4: lastFour(num),
+  }
+}
+
+// Cards saved before the open-loop feature shipped don't have a
+// `kind` field — treat them as merchant gift cards so nothing breaks.
+export const cardKind = (card) =>
+  (card && card.kind) || CARD_KIND.MERCHANT_GIFT_CARD
+
+export const isOpenLoopCard = (card) =>
+  cardKind(card) === CARD_KIND.OPEN_LOOP_PREPAID
+
+// Masked display of a card's number for lists and detail views.
+// Open-loop cards have no stored PAN, only last4, so they render
+// from that field.
+export const cardMaskedNumber = (card) => {
+  if (isOpenLoopCard(card)) {
+    const l4 = (card && card.last4) || ''
+    return '•••• •••• •••• ' + l4
+  }
+  return maskNumber(card && card.number)
+}
+
 // Format the full number with spaces every 4 chars for the detail view.
 export const formatNumber = (num) =>
   (num || '').replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim()

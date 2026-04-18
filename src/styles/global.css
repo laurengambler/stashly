@@ -557,6 +557,119 @@ button { cursor: pointer; border: none; background: none; padding: 0; }
   padding: 12px 20px;
 }
 
+/* ---- Reference-only badge (open-loop prepaid cards) ---- */
+.pw-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(25, 18, 61, 0.12);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Badge floats in the top-right of a colored card so it reads
+   against the ombre background without clashing with the monogram. */
+.pw-badge-on-card {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.22);
+  color: inherit;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ---- Reference-only notice on the detail screen ---- */
+.pw-notice {
+  margin: 0 20px 16px;
+  padding: 14px 16px;
+  background: var(--mint);
+  color: var(--ink);
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* ---- Limited-storage confirmation modal ---- */
+.pw-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(25, 18, 61, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 200;
+  animation: pw-fade 0.18s ease-out;
+}
+
+.pw-modal {
+  width: 100%;
+  max-width: 360px;
+  background: var(--bone);
+  border-radius: 20px;
+  padding: 24px 22px 18px;
+  box-shadow: 0 20px 60px rgba(25, 18, 61, 0.25);
+  animation: pw-pop 0.22s ease-out;
+}
+
+.pw-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 10px;
+}
+
+.pw-modal-body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-60);
+  margin: 0 0 20px;
+}
+
+.pw-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pw-modal-btn {
+  padding: 13px 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 15px;
+  transition: transform 0.15s, background 0.15s;
+  text-align: center;
+}
+.pw-modal-btn:active { transform: scale(0.97); }
+
+.pw-modal-btn.primary {
+  background: var(--ink);
+  color: var(--bone);
+}
+
+.pw-modal-btn.secondary {
+  background: var(--ink-08);
+  color: var(--ink);
+}
+.pw-modal-btn.secondary:hover { background: var(--ink-15); }
+
+@keyframes pw-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pw-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 /* ---- Toast ---- */
 .pw-toast {
   position: fixed;
