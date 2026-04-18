@@ -8,7 +8,6 @@ import AddCardScreen from './components/AddCardScreen.jsx'
 import CardDetailScreen from './components/CardDetailScreen.jsx'
 import Toast from './components/Toast.jsx'
 import { loadCards, saveCards } from './lib/storage.js'
-import { SAMPLE_CARDS } from './lib/sampleData.js'
 import { themeAtPosition } from './lib/helpers.js'
 
 export default function App() {
@@ -17,12 +16,8 @@ export default function App() {
 
   // All saved cards. Loaded synchronously from localStorage on first
   // render so we never overwrite storage with an empty default before
-  // hydration. Falls back to sample data only when storage is truly
-  // absent (first-ever visit).
-  const [cards, setCards] = useState(() => {
-    const stored = loadCards()
-    return stored === null ? SAMPLE_CARDS : stored
-  })
+  // hydration. First-time users start with an empty wallet.
+  const [cards, setCards] = useState(() => loadCards() ?? [])
 
   // The currently-open card ID (only relevant on the detail screen).
   const [activeCardId, setActiveCardId] = useState(null)
