@@ -308,12 +308,129 @@ button { cursor: pointer; border: none; background: none; padding: 0; }
 
 .pw-field textarea {
   resize: none;
-  min-height: 60px;
+  overflow: hidden;
+  line-height: 1.4;
 }
 
 .pw-hint {
   font-size: 12px;
   color: var(--ink-60);
+  padding: 8px 18px 0;
+  line-height: 1.4;
+}
+
+/* ---- Photo sections (Add Card form + Card Detail) ---- */
+.pw-photos-group {
+  background: #fff;
+  border-radius: 14px;
+  margin-bottom: 16px;
+  padding: 14px 18px 18px;
+}
+
+.pw-photos-group-title {
+  font-size: 12px;
+  color: var(--ink-60);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.pw-photos-group-hint {
+  font-size: 12px;
+  color: var(--ink-40);
+  margin-bottom: 12px;
+}
+
+.pw-photos-section {
+  background: #fff;
+  border-radius: 14px;
+  margin: 0 20px 16px;
+  padding: 14px 18px 18px;
+}
+
+.pw-photos-section-title {
+  font-size: 12px;
+  color: var(--ink-60);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+.pw-photo-slot {
+  padding: 6px 0;
+  border-bottom: 0.5px solid var(--ink-15);
+}
+.pw-photo-slot:first-child { padding-top: 0; }
+.pw-photo-slot:last-child { border-bottom: none; padding-bottom: 0; }
+
+.pw-photo-slot-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.pw-photo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink-08);
+  color: var(--ink);
+  border: 1px solid var(--ink-15);
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 13px;
+  transition: transform 0.15s, background 0.15s, opacity 0.15s;
+}
+.pw-photo-btn:active { transform: scale(0.97); }
+.pw-photo-btn:hover { background: var(--ink-15); }
+.pw-photo-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pw-photo-btn-add {
+  width: 100%;
+}
+
+.pw-photo-btn-replace {
+  flex: 1;
+}
+
+.pw-photo-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pw-photo-preview-img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: var(--ink-08);
+  display: block;
+}
+
+.pw-photo-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pw-photo-remove {
+  background: transparent;
+  color: #B33;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.pw-photo-remove:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pw-error {
+  font-size: 13px;
+  color: #B33;
   padding: 8px 18px 0;
   line-height: 1.4;
 }

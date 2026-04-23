@@ -8,6 +8,7 @@ import AddCardScreen from './components/AddCardScreen.jsx'
 import CardDetailScreen from './components/CardDetailScreen.jsx'
 import Toast from './components/Toast.jsx'
 import { loadCards, saveCards } from './lib/storage.js'
+import { deletePhoto } from './lib/photoStorage.js'
 import { themeAtPosition } from './lib/helpers.js'
 
 export default function App() {
@@ -74,11 +75,28 @@ export default function App() {
     showToast('Entry removed')
   }
 
+  const handleUpdateCard = (cardId, updates) => {
+    setCards((prev) =>
+      prev.map((c) => (c.id === cardId ? { ...c, ...updates } : c))
+    )
+  }
+
   const handleDelete = (cardId) => {
+    const removed = cards.find((c) => c.id === cardId)
     setCards((prev) => prev.filter((c) => c.id !== cardId))
     setActiveCardId(null)
     setScreen('wallet')
     showToast('Card removed')
+    // Best-effort photo cleanup — failures here shouldn't block
+    // the UI or resurrect a card the user just removed.
+    if (removed) {
+      if (removed.frontPhotoId) {
+        deletePhoto(removed.frontPhotoId).catch(() => {})
+      }
+      if (removed.backPhotoId) {
+        deletePhoto(removed.backPhotoId).catch(() => {})
+      }
+    }
   }
 
   // Single source of truth for card ordering: sorted A→Z by merchant.
@@ -125,6 +143,7 @@ export default function App() {
           onDeduct={handleDeduct}
           onUndo={handleUndo}
           onDelete={handleDelete}
+          onUpdateCard={handleUpdateCard}
         />
       )}
 

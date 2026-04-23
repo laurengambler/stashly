@@ -4,8 +4,9 @@
 // only) the barcode. Open-loop prepaid cards render in a limited
 // reference view with no PAN, no PIN, and no barcode.
 
-import { useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import Barcode from './Barcode.jsx'
+import PhotoInput from './PhotoInput.jsx'
 import {
   formatNumber,
   balanceSymbol,
@@ -18,6 +19,123 @@ import {
   cardMaskedNumber,
   CARD_BRAND,
 } from '../lib/helpers.js'
+import {
+  compressImage,
+  savePhoto,
+  getPhoto,
+  deletePhoto,
+  newPhotoId,
+} from '../lib/photoStorage.js'
+
+// Sub-component: add/replace/remove front and back photos on an
+// already-saved card. Photos live in IndexedDB; this component
+// hydrates object URLs from the stored blobs on mount and whenever
+// the card's photo IDs change, and revokes them on unmount so we
+// don't leak blob URLs.
+function CardPhotos({ card, onUpdateCard }) {
+  const [urls, setUrls] = useState({ front: null, back: null })
+  const [busy, setBusy] = useState(null) // 'front' | 'back' | null
+  const [error, setError] = useState(null)
+
+  // Keep a ref to current URLs so the unmount cleanup always revokes
+  // the latest values, not a stale snapshot from first render.
+  const urlsRef = useRef(urls)
+  urlsRef.current = urls
+  useEffect(
+    () => () => {
+      if (urlsRef.current.front) URL.revokeObjectURL(urlsRef.current.front)
+      if (urlsRef.current.back) URL.revokeObjectURL(urlsRef.current.back)
+    },
+    []
+  )
+
+  // Hydrate object URLs whenever the card's stored photo IDs change.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const [fBlob, bBlob] = await Promise.all([
+        card.frontPhotoId
+          ? getPhoto(card.frontPhotoId).catch(() => null)
+          : Promise.resolve(null),
+        card.backPhotoId
+          ? getPhoto(card.backPhotoId).catch(() => null)
+          : Promise.resolve(null),
+      ])
+      if (cancelled) return
+      const nextFront = fBlob ? URL.createObjectURL(fBlob) : null
+      const nextBack = bBlob ? URL.createObjectURL(bBlob) : null
+      setUrls((prev) => {
+        if (prev.front && prev.front !== nextFront) {
+          URL.revokeObjectURL(prev.front)
+        }
+        if (prev.back && prev.back !== nextBack) {
+          URL.revokeObjectURL(prev.back)
+        }
+        return { front: nextFront, back: nextBack }
+      })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [card.frontPhotoId, card.backPhotoId])
+
+  const fieldFor = (side) =>
+    side === 'front' ? 'frontPhotoId' : 'backPhotoId'
+
+  const handleFile = async (side, file) => {
+    setBusy(side)
+    setError(null)
+    try {
+      const blob = await compressImage(file).catch(() => file)
+      const id = newPhotoId()
+      await savePhoto(id, blob)
+      const field = fieldFor(side)
+      const oldId = card[field]
+      onUpdateCard(card.id, { [field]: id })
+      if (oldId) deletePhoto(oldId).catch(() => {})
+    } catch (err) {
+      console.warn('Could not save photo', err)
+      setError('Could not save photo. Please try again.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const handleRemove = async (side) => {
+    const field = fieldFor(side)
+    const oldId = card[field]
+    if (!oldId) return
+    setBusy(side)
+    setError(null)
+    try {
+      onUpdateCard(card.id, { [field]: null })
+      deletePhoto(oldId).catch(() => {})
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="pw-photos-section">
+      <div className="pw-photos-section-title">Card photos</div>
+      <PhotoInput
+        label="Front photo"
+        previewUrl={urls.front}
+        onFileSelected={(f) => handleFile('front', f)}
+        onRemove={() => handleRemove('front')}
+        busy={busy === 'front'}
+      />
+      <PhotoInput
+        label="Back photo"
+        previewUrl={urls.back}
+        onFileSelected={(f) => handleFile('back', f)}
+        onRemove={() => handleRemove('back')}
+        busy={busy === 'back'}
+      />
+      {error && <p className="pw-error">{error}</p>}
+    </div>
+  )
+}
 
 // Sub-component: the spending tracker section.
 // Only rendered when the card has a starting balance.
@@ -161,6 +279,7 @@ export default function CardDetailScreen({
   onDeduct,
   onUndo,
   onDelete,
+  onUpdateCard,
 }) {
   const balance = cardBalanceDisplay(card)
   const hasBalance = computeBalance(card) !== null
@@ -251,6 +370,8 @@ export default function CardDetailScreen({
           </div>
         </div>
       )}
+
+      <CardPhotos card={card} onUpdateCard={onUpdateCard} />
 
       {!openLoop && (
         <div className="pw-barcode">
