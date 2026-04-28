@@ -6,22 +6,24 @@ import { useState, useEffect, useMemo } from 'react'
 import WalletScreen from './components/WalletScreen.jsx'
 import AddCardScreen from './components/AddCardScreen.jsx'
 import CardDetailScreen from './components/CardDetailScreen.jsx'
+import ArchivesScreen from './components/ArchivesScreen.jsx'
+import ProfileScreen from './components/ProfileScreen.jsx'
+import BottomNav from './components/BottomNav.jsx'
+import ConfirmModal from './components/ConfirmModal.jsx'
 import Toast from './components/Toast.jsx'
 import { loadCards, saveCards } from './lib/storage.js'
 import { deletePhoto } from './lib/photoStorage.js'
-import { themeAtPosition } from './lib/helpers.js'
+import { themeForCard } from './lib/helpers.js'
 
 export default function App() {
-  // `screen` is one of: 'wallet' | 'add' | 'detail'
+  // 'wallet' | 'add' | 'detail' | 'archives' | 'profile'
   const [screen, setScreen] = useState('wallet')
 
-  // All saved cards. Loaded synchronously from localStorage on first
-  // render so we never overwrite storage with an empty default before
-  // hydration. First-time users start with an empty wallet.
   const [cards, setCards] = useState(() => loadCards() ?? [])
-
-  // The currently-open card ID (only relevant on the detail screen).
   const [activeCardId, setActiveCardId] = useState(null)
+
+  // Pending archive — { id } while the confirmation modal is open.
+  const [pendingArchive, setPendingArchive] = useState(null)
 
   // Transient toast message.
   const [toast, setToast] = useState({ message: '', visible: false })
@@ -30,7 +32,6 @@ export default function App() {
     setTimeout(() => setToast((t) => ({ ...t, visible: false })), 1800)
   }
 
-  // --- Persist whenever cards change. ---
   useEffect(() => {
     saveCards(cards)
   }, [cards])
@@ -81,52 +82,113 @@ export default function App() {
     )
   }
 
+  const handleToggleFavorite = (cardId) => {
+    setCards((prev) =>
+      prev.map((c) =>
+        c.id === cardId ? { ...c, favorite: !c.favorite } : c
+      )
+    )
+  }
+
+  const requestArchive = (cardId) => {
+    setPendingArchive({ id: cardId })
+  }
+
+  const confirmArchive = () => {
+    if (!pendingArchive) return
+    const id = pendingArchive.id
+    setCards((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, archived: true } : c))
+    )
+    setPendingArchive(null)
+    // If the user archived the card they were viewing, return to list.
+    if (activeCardId === id) {
+      setActiveCardId(null)
+      setScreen('wallet')
+    }
+    showToast('Card archived')
+  }
+
+  const handleRestore = (cardId) => {
+    setCards((prev) =>
+      prev.map((c) => (c.id === cardId ? { ...c, archived: false } : c))
+    )
+    showToast('Card restored')
+  }
+
   const handleDelete = (cardId) => {
     const removed = cards.find((c) => c.id === cardId)
     setCards((prev) => prev.filter((c) => c.id !== cardId))
     setActiveCardId(null)
     setScreen('wallet')
     showToast('Card removed')
-    // Best-effort photo cleanup — failures here shouldn't block
-    // the UI or resurrect a card the user just removed.
     if (removed) {
-      if (removed.frontPhotoId) {
-        deletePhoto(removed.frontPhotoId).catch(() => {})
-      }
-      if (removed.backPhotoId) {
-        deletePhoto(removed.backPhotoId).catch(() => {})
-      }
+      if (removed.frontPhotoId) deletePhoto(removed.frontPhotoId).catch(() => {})
+      if (removed.backPhotoId) deletePhoto(removed.backPhotoId).catch(() => {})
     }
   }
 
-  // Single source of truth for card ordering: sorted A→Z by merchant.
-  // The gradient is indexed against this list, so both the wallet list
-  // and the detail screen derive the same color for any given card.
-  const sortedCards = useMemo(
+  // Active list: hide archived. Sort favorites first, then A→Z by merchant.
+  const activeCards = useMemo(() => {
+    const visible = cards.filter((c) => !c.archived)
+    return [...visible].sort((a, b) => {
+      const fa = a.favorite ? 1 : 0
+      const fb = b.favorite ? 1 : 0
+      if (fa !== fb) return fb - fa
+      return (a.merchant || '').localeCompare(b.merchant || '', undefined, {
+        sensitivity: 'base',
+      })
+    })
+  }, [cards])
+
+  const archivedCards = useMemo(
     () =>
-      [...cards].sort((a, b) =>
-        (a.merchant || '').localeCompare(b.merchant || '', undefined, {
-          sensitivity: 'base',
-        })
-      ),
+      cards
+        .filter((c) => c.archived)
+        .sort((a, b) =>
+          (a.merchant || '').localeCompare(b.merchant || '', undefined, {
+            sensitivity: 'base',
+          })
+        ),
     [cards]
   )
 
-  // Find the currently-active card and its gradient position.
-  const activeIndex = sortedCards.findIndex((c) => c.id === activeCardId)
-  const activeCard = activeIndex >= 0 ? sortedCards[activeIndex] : null
-  const activeTheme =
-    activeIndex >= 0 ? themeAtPosition(activeIndex, sortedCards.length) : null
+  // The currently-open card and its theme (uses card color).
+  const activeCard = activeCardId
+    ? cards.find((c) => c.id === activeCardId) || null
+    : null
+  const activeTheme = activeCard ? themeForCard(activeCard) : null
+
+  // Bottom nav is hidden on the add and detail flows so they feel
+  // like full-screen tasks.
+  const showBottomNav = screen === 'wallet' || screen === 'archives' || screen === 'profile'
+
+  const handleTabChange = (tabId) => {
+    setActiveCardId(null)
+    setScreen(tabId)
+  }
 
   return (
-    <div className="pw-app">
+    <div className={'pw-app' + (showBottomNav ? ' has-bottomnav' : '')}>
       {screen === 'wallet' && (
         <WalletScreen
-          cards={sortedCards}
+          cards={activeCards}
           onAdd={() => setScreen('add')}
+          onOpen={handleOpenCard}
+          onArchive={requestArchive}
+          onToggleFavorite={handleToggleFavorite}
+        />
+      )}
+
+      {screen === 'archives' && (
+        <ArchivesScreen
+          cards={archivedCards}
+          onRestore={handleRestore}
           onOpen={handleOpenCard}
         />
       )}
+
+      {screen === 'profile' && <ProfileScreen />}
 
       {screen === 'add' && (
         <AddCardScreen
@@ -139,11 +201,29 @@ export default function App() {
         <CardDetailScreen
           card={activeCard}
           theme={activeTheme}
-          onBack={() => setScreen('wallet')}
+          onBack={() => setScreen(activeCard.archived ? 'archives' : 'wallet')}
           onDeduct={handleDeduct}
           onUndo={handleUndo}
           onDelete={handleDelete}
           onUpdateCard={handleUpdateCard}
+          onArchive={requestArchive}
+          onToggleFavorite={handleToggleFavorite}
+          onRestore={handleRestore}
+        />
+      )}
+
+      {showBottomNav && (
+        <BottomNav active={screen} onChange={handleTabChange} />
+      )}
+
+      {pendingArchive && (
+        <ConfirmModal
+          title="Archive this card?"
+          body="You can restore it later from Archives."
+          confirmLabel="Archive"
+          cancelLabel="Cancel"
+          onConfirm={confirmArchive}
+          onCancel={() => setPendingArchive(null)}
         />
       )}
 

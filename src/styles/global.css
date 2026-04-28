@@ -51,6 +51,12 @@ button { cursor: pointer; border: none; background: none; padding: 0; }
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* When the bottom nav is mounted, leave space at the bottom of every
+   screen so its content scrolls clear of the nav. */
+.pw-app.has-bottomnav {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 76px);
+}
+
 .pw-screen {
   display: flex;
   flex-direction: column;
@@ -785,6 +791,424 @@ button { cursor: pointer; border: none; background: none; padding: 0; }
 @keyframes pw-pop {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Bottom nav ---- */
+.pw-bottomnav {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 100%;
+  max-width: 480px;
+  background: rgba(243, 238, 232, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 0.5px solid var(--ink-15);
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  padding: 8px 8px calc(env(safe-area-inset-bottom) + 8px);
+  z-index: 90;
+}
+
+.pw-bottomnav-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  box-shadow: none;
+  color: var(--ink-60);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: color 0.15s, background 0.15s;
+}
+
+/* Kill any browser-default focus ring / active dot on the tab itself
+   and on every state. We render our own active highlight via the
+   .pw-bottomnav-icon pill, so no other indicator should ever appear. */
+.pw-bottomnav-tab:focus,
+.pw-bottomnav-tab:focus-visible,
+.pw-bottomnav-tab:active,
+.pw-bottomnav-tab:hover {
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.pw-bottomnav-tab::before,
+.pw-bottomnav-tab::after {
+  content: none;
+}
+
+.pw-bottomnav-tab.active {
+  color: var(--ink);
+}
+
+.pw-bottomnav-tab.active .pw-bottomnav-icon {
+  background: var(--mint);
+}
+
+.pw-bottomnav-icon {
+  width: 44px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s;
+}
+
+.pw-bottomnav-label {
+  line-height: 1;
+}
+
+/* ---- Profile screen ---- */
+.pw-profile-body {
+  flex: 1;
+  padding: 8px 20px 24px;
+  overflow-y: auto;
+}
+
+.pw-profile-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 28px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--ink-08);
+}
+
+.pw-profile-illo {
+  width: 72px;
+  height: 72px;
+  border-radius: 24px;
+  background: var(--mint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pw-profile-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.pw-profile-body-text {
+  font-size: 14px;
+  color: var(--ink-60);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 280px;
+}
+
+/* ---- Swipe rows ---- */
+.pw-swipe {
+  position: relative;
+  margin-bottom: 14px;
+  border-radius: 20px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.pw-swipe-card { /* nothing extra — placeholder hook for the wallet variant */ }
+
+.pw-swipe-content {
+  position: relative;
+  z-index: 2;
+  touch-action: pan-y;
+  will-change: transform;
+}
+
+/* The inner card already has its own border-radius/shadow, so we
+   strip the wrapper's spacing for swipe rows that contain a card. */
+.pw-swipe-card .pw-swipe-content > .pw-card { margin-bottom: 0; }
+
+.pw-swipe-actions {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  z-index: 1;
+  padding: 0 14px;
+}
+
+.pw-swipe-actions-left {
+  left: 0;
+  justify-content: flex-start;
+}
+
+.pw-swipe-actions-right {
+  right: 0;
+  justify-content: flex-end;
+}
+
+.pw-swipe-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 84px;
+  min-height: 60%;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  transition: transform 0.12s;
+}
+.pw-swipe-action:active { transform: scale(0.96); }
+
+.pw-swipe-archive {
+  background: var(--ink);
+  color: var(--bone);
+}
+
+.pw-swipe-favorite {
+  background: var(--lime);
+  color: var(--ink);
+}
+.pw-swipe-favorite.is-on {
+  background: var(--ink);
+  color: var(--lime);
+}
+
+/* Star indicator on a wallet list card */
+.pw-card-fav {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 1px 2px rgba(25,18,61,0.18));
+  pointer-events: none;
+}
+
+/* When the card is a reference-only badge AND favorite, push the star
+   below the badge so they don't collide. */
+.pw-card .pw-badge-on-card + .pw-card-fav {
+  top: 44px;
+}
+
+/* ---- Archives screen ---- */
+.pw-archive-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.pw-archive-row .pw-card {
+  flex: 1;
+  margin: 0;
+  text-align: left;
+}
+
+.pw-card-compact {
+  min-height: 110px;
+  padding: 18px 18px 16px;
+}
+
+.pw-archive-restore {
+  flex-shrink: 0;
+  width: 78px;
+  border-radius: 18px;
+  background: var(--ink);
+  color: var(--bone);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: transform 0.15s;
+}
+.pw-archive-restore:active { transform: scale(0.96); }
+
+/* ---- Color picker swatches ---- */
+.pw-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.pw-color-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid var(--ink-15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.pw-color-swatch:active { transform: scale(0.92); }
+
+.pw-color-swatch.selected {
+  box-shadow: 0 0 0 2px var(--bone), 0 0 0 4px var(--ink);
+}
+
+/* ---- Favorite (star) button in detail header ---- */
+.pw-fav-btn {
+  min-width: 44px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--ink-60);
+  transition: color 0.15s, transform 0.15s;
+}
+.pw-fav-btn:active { transform: scale(0.92); }
+.pw-fav-btn.is-on { color: var(--ink); }
+
+/* ---- Detail-screen action buttons (archive/restore + remove) ---- */
+.pw-detail-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 24px;
+}
+
+.pw-secondary-action {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 20px;
+  border-radius: 999px;
+  background: var(--ink-08);
+  transition: background 0.15s, transform 0.15s;
+}
+.pw-secondary-action:active { transform: scale(0.97); }
+.pw-secondary-action:hover { background: var(--ink-15); }
+
+/* The pw-delete reset spacing now that it shares a container. */
+.pw-detail-actions .pw-delete { margin: 0; }
+
+/* ---- Barcode CTA (whole barcode block is tappable) ---- */
+.pw-barcode-cta {
+  display: block;
+  width: calc(100% - 40px);
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.pw-barcode-cta:active { transform: scale(0.99); }
+
+.pw-barcode-cta-hint {
+  font-size: 11px;
+  color: var(--ink-60);
+  letter-spacing: 0.04em;
+  margin-top: 8px;
+}
+
+/* ---- Fullscreen scan view ---- */
+.pw-fullscan {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(env(safe-area-inset-top) + 18px) 24px calc(env(safe-area-inset-bottom) + 24px);
+  animation: pw-fade 0.2s ease-out;
+}
+
+.pw-fullscan-close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  background: var(--ink-08);
+  transition: background 0.15s, transform 0.15s;
+}
+.pw-fullscan-close:active { transform: scale(0.94); }
+.pw-fullscan-close:hover { background: var(--ink-15); }
+
+.pw-fullscan-merchant {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin-top: 12px;
+}
+
+.pw-fullscan-barcode-wrap {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.pw-fullscan-barcode-wrap .pw-barcode-svg {
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+}
+
+.pw-fullscan-hint {
+  font-size: 13px;
+  color: var(--ink-60);
+  letter-spacing: 0.02em;
+  text-align: center;
+  padding-bottom: 8px;
+}
+
+.pw-fullscan-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 360px;
+  background: var(--bone);
+  border-radius: 20px;
+  padding: 18px 18px 14px;
+  box-shadow: 0 16px 40px rgba(25, 18, 61, 0.18);
+  animation: pw-pop 0.22s ease-out;
+}
+
+.pw-fullscan-prompt-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.pw-fullscan-prompt-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* ---- Toast ---- */

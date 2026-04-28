@@ -13,6 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import PhotoInput from './PhotoInput.jsx'
+import ColorPicker from './ColorPicker.jsx'
 import {
   uid,
   balanceNumeric,
@@ -20,6 +21,7 @@ import {
   classifyCardNumber,
   CARD_KIND,
   CARD_BRAND,
+  CARD_COLORS,
 } from '../lib/helpers.js'
 import {
   compressImage,
@@ -164,6 +166,7 @@ export default function AddCardScreen({ onCancel, onSave }) {
   const [pin, setPin] = useState('')
   const [balance, setBalance] = useState('')
   const [notes, setNotes] = useState('')
+  const [color, setColor] = useState(CARD_COLORS[0])
 
   // Pending photos — { blob, url } while the card hasn't been saved.
   // Only committed to IndexedDB in commitCard().
@@ -272,6 +275,9 @@ export default function AddCardScreen({ onCancel, onSave }) {
           notes: notes.trim(),
           frontPhotoId: photoIds.frontPhotoId,
           backPhotoId: photoIds.backPhotoId,
+          color,
+          favorite: false,
+          archived: false,
           createdAt: Date.now(),
         })
       } else {
@@ -288,6 +294,9 @@ export default function AddCardScreen({ onCancel, onSave }) {
           notes: notes.trim(),
           frontPhotoId: photoIds.frontPhotoId,
           backPhotoId: photoIds.backPhotoId,
+          color,
+          favorite: false,
+          archived: false,
           createdAt: Date.now(),
         })
       }
@@ -421,6 +430,13 @@ export default function AddCardScreen({ onCancel, onSave }) {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Expiration, who gifted it, anything else"
             />
+          </div>
+        </div>
+
+        <div className="pw-group">
+          <div className="pw-field" style={{ paddingBottom: 16 }}>
+            <label>Card color</label>
+            <ColorPicker value={color} onChange={setColor} />
           </div>
         </div>
 

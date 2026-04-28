@@ -72,13 +72,43 @@ const relLuminance = (hex) => {
 export const themeAtPosition = (i, total) => {
   const t = total <= 1 ? 0 : i / (total - 1)
   const bg = sampleGradient(t)
-  const dark = relLuminance(bg) < 0.5
+  return themeFromColor(bg)
+}
+
+// Build a card theme from any solid hex color.
+export const themeFromColor = (hex) => {
+  const dark = relLuminance(hex) < 0.5
   return {
-    bg,
+    bg: hex,
     text: dark ? '#F3EEE8' : '#19123D',
     mono: dark ? 'rgba(255,255,255,0.18)' : 'rgba(25,18,61,0.12)',
   }
 }
+
+// User-selectable card color palette.
+export const CARD_COLORS = [
+  '#BADDCF',
+  '#E8F3DA',
+  '#6787AF',
+  '#19123D',
+  '#B2F332',
+  '#F3EEE8',
+]
+
+// Deterministically pick a default palette color for a card that
+// has no `color` field yet (cards saved before color shipped).
+// Hashes the id so a given card always gets the same default.
+export const defaultColorForCard = (card) => {
+  const seed = String((card && card.id) || '')
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0
+  return CARD_COLORS[Math.abs(h) % CARD_COLORS.length]
+}
+
+// Resolve the theme for any card — explicit color wins, otherwise
+// fall back to a stable default from the palette.
+export const themeForCard = (card) =>
+  themeFromColor(card.color || defaultColorForCard(card))
 
 // Simple ID generators — random enough for a local-only app.
 export const uid = () =>

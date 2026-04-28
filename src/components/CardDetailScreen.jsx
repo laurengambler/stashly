@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import Barcode from './Barcode.jsx'
 import PhotoInput from './PhotoInput.jsx'
+import ColorPicker from './ColorPicker.jsx'
 import {
   formatNumber,
   balanceSymbol,
@@ -18,6 +19,7 @@ import {
   isOpenLoopCard,
   cardMaskedNumber,
   CARD_BRAND,
+  defaultColorForCard,
 } from '../lib/helpers.js'
 import {
   compressImage,
@@ -27,18 +29,30 @@ import {
   newPhotoId,
 } from '../lib/photoStorage.js'
 
+function StarIcon({ filled, size = 22 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 2.5l2.95 6.4 7.05.7-5.3 4.9 1.55 6.95L12 17.7l-6.25 3.75L7.3 14.5 2 9.6l7.05-.7L12 2.5z" />
+    </svg>
+  )
+}
+
 // Sub-component: add/replace/remove front and back photos on an
-// already-saved card. Photos live in IndexedDB; this component
-// hydrates object URLs from the stored blobs on mount and whenever
-// the card's photo IDs change, and revokes them on unmount so we
-// don't leak blob URLs.
+// already-saved card.
 function CardPhotos({ card, onUpdateCard }) {
   const [urls, setUrls] = useState({ front: null, back: null })
-  const [busy, setBusy] = useState(null) // 'front' | 'back' | null
+  const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
 
-  // Keep a ref to current URLs so the unmount cleanup always revokes
-  // the latest values, not a stale snapshot from first render.
   const urlsRef = useRef(urls)
   urlsRef.current = urls
   useEffect(
@@ -49,7 +63,6 @@ function CardPhotos({ card, onUpdateCard }) {
     []
   )
 
-  // Hydrate object URLs whenever the card's stored photo IDs change.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -65,12 +78,8 @@ function CardPhotos({ card, onUpdateCard }) {
       const nextFront = fBlob ? URL.createObjectURL(fBlob) : null
       const nextBack = bBlob ? URL.createObjectURL(bBlob) : null
       setUrls((prev) => {
-        if (prev.front && prev.front !== nextFront) {
-          URL.revokeObjectURL(prev.front)
-        }
-        if (prev.back && prev.back !== nextBack) {
-          URL.revokeObjectURL(prev.back)
-        }
+        if (prev.front && prev.front !== nextFront) URL.revokeObjectURL(prev.front)
+        if (prev.back && prev.back !== nextBack) URL.revokeObjectURL(prev.back)
         return { front: nextFront, back: nextBack }
       })
     })()
@@ -137,12 +146,19 @@ function CardPhotos({ card, onUpdateCard }) {
   )
 }
 
-// Sub-component: the spending tracker section.
-// Only rendered when the card has a starting balance.
-function SpendingTracker({ card, onDeduct, onUndo }) {
+// Sub-component: the spending tracker.
+function SpendingTracker({ card, onDeduct, onUndo, autoFocus }) {
   const [amount, setAmount] = useState('')
+  const inputRef = useRef(null)
   const parsed = parseFloat(amount)
   const canDeduct = !isNaN(parsed) && parsed > 0
+
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [autoFocus])
 
   const handleDeduct = () => {
     if (!canDeduct) return
@@ -150,7 +166,6 @@ function SpendingTracker({ card, onDeduct, onUndo }) {
     setAmount('')
   }
 
-  // Show most recent first.
   const transactions = useMemo(
     () => (card.transactions || []).slice().sort((a, b) => b.date - a.date),
     [card.transactions]
@@ -159,12 +174,13 @@ function SpendingTracker({ card, onDeduct, onUndo }) {
   const sym = balanceSymbol(card.balance)
 
   return (
-    <div className="pw-section">
+    <div className="pw-section" id="pw-spending-tracker">
       <div className="pw-row" style={{ borderBottom: 'none', paddingBottom: 6 }}>
         <div className="pw-row-label">Track spending</div>
       </div>
       <div className="pw-deduct-row">
         <input
+          ref={inputRef}
           type="number"
           className="pw-deduct-input"
           value={amount}
@@ -219,37 +235,28 @@ function SpendingTracker({ card, onDeduct, onUndo }) {
   )
 }
 
-// Sub-component: the PIN row with tap-to-reveal.
 function PinRow({ pin }) {
   const [revealed, setRevealed] = useState(false)
-
   if (!pin) {
     return (
       <div className="pw-row">
         <div className="pw-row-label">PIN</div>
-        <div
-          className="pw-row-value"
-          style={{ color: 'rgba(25,18,61,0.4)' }}
-        >
+        <div className="pw-row-value" style={{ color: 'rgba(25,18,61,0.4)' }}>
           Not set
         </div>
       </div>
     )
   }
-
   const toggle = () => {
     setRevealed((r) => !r)
     haptic(15)
   }
-
   return (
     <div className="pw-row">
       <div className="pw-row-label">PIN</div>
       <div className="pw-pin-row">
         <div
-          className={
-            'pw-row-value' + (revealed ? '' : ' pw-pin-mask')
-          }
+          className={'pw-row-value' + (revealed ? '' : ' pw-pin-mask')}
           style={revealed ? { color: '#19123D' } : undefined}
         >
           {revealed ? pin : '••••'}
@@ -265,11 +272,73 @@ function PinRow({ pin }) {
   )
 }
 
-// Short brand label for the reference notice on open-loop cards.
 const brandLabel = (brand) => {
   if (brand === CARD_BRAND.VISA) return 'Visa'
   if (brand === CARD_BRAND.MASTERCARD) return 'Mastercard'
   return 'Prepaid'
+}
+
+// Fullscreen scan view. Opens when the user taps "Scan at register"
+// on the detail screen. After 12 seconds it asks the user whether
+// they used the card; "Yes" closes the scan view and focuses the
+// spending tracker on the underlying detail screen so they can
+// deduct an amount immediately.
+function FullscreenBarcode({ card, onClose, onUseCard }) {
+  const [askUsed, setAskUsed] = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setAskUsed(true), 12000)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Lock body scroll while open.
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  return (
+    <div className="pw-fullscan" role="dialog" aria-modal="true" aria-label="Scan card">
+      <button className="pw-fullscan-close" onClick={onClose} aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+
+      <div className="pw-fullscan-merchant">{card.merchant}</div>
+
+      <div className="pw-fullscan-barcode-wrap">
+        <Barcode value={card.number} large />
+      </div>
+
+      <div className="pw-fullscan-hint">Turn brightness up for easier scanning.</div>
+
+      {askUsed && (
+        <div className="pw-fullscan-prompt" role="alertdialog">
+          <div className="pw-fullscan-prompt-title">Did you use this card?</div>
+          <div className="pw-fullscan-prompt-actions">
+            <button
+              className="pw-modal-btn primary"
+              onClick={() => {
+                onUseCard()
+              }}
+            >
+              Yes, deduct amount
+            </button>
+            <button
+              className="pw-modal-btn secondary"
+              onClick={() => setAskUsed(false)}
+            >
+              No
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function CardDetailScreen({
@@ -280,14 +349,30 @@ export default function CardDetailScreen({
   onUndo,
   onDelete,
   onUpdateCard,
+  onArchive,
+  onToggleFavorite,
+  onRestore,
 }) {
   const balance = cardBalanceDisplay(card)
   const hasBalance = computeBalance(card) !== null
   const openLoop = isOpenLoopCard(card)
+  const [scanOpen, setScanOpen] = useState(false)
+  const [focusDeduct, setFocusDeduct] = useState(0)
+
+  const currentColor = card.color || defaultColorForCard(card)
 
   const handleDelete = () => {
     if (confirm('Remove ' + card.merchant + ' from your wallet?')) {
       onDelete(card.id)
+    }
+  }
+
+  const handleUseCard = () => {
+    setScanOpen(false)
+    if (hasBalance) {
+      // Bumping the counter forces a re-focus even if user opens scan
+      // twice in a row and clicks "Yes" both times.
+      setFocusDeduct((n) => n + 1)
     }
   }
 
@@ -308,10 +393,17 @@ export default function CardDetailScreen({
           >
             <path d="M15 18l-6-6 6-6" />
           </svg>
-          Wallet
+          {card.archived ? 'Archives' : 'Wallet'}
         </button>
         <h2 className="pw-form-title">{card.merchant}</h2>
-        <div style={{ minWidth: 60 }} />
+        <button
+          className={'pw-fav-btn' + (card.favorite ? ' is-on' : '')}
+          onClick={() => onToggleFavorite(card.id)}
+          aria-label={card.favorite ? 'Unfavorite' : 'Favorite'}
+          aria-pressed={!!card.favorite}
+        >
+          <StarIcon filled={!!card.favorite} size={20} />
+        </button>
       </div>
 
       <div className="pw-detail-hero">
@@ -340,6 +432,7 @@ export default function CardDetailScreen({
       {hasBalance && (
         <SpendingTracker
           card={card}
+          autoFocus={focusDeduct}
           onDeduct={(amt) => {
             onDeduct(card.id, {
               id: txid(),
@@ -362,6 +455,16 @@ export default function CardDetailScreen({
         {!openLoop && <PinRow pin={card.pin} />}
       </div>
 
+      <div className="pw-section">
+        <div className="pw-row" style={{ borderBottom: 'none' }}>
+          <div className="pw-row-label">Card color</div>
+          <ColorPicker
+            value={currentColor}
+            onChange={(c) => onUpdateCard(card.id, { color: c })}
+          />
+        </div>
+      </div>
+
       {card.notes && (
         <div className="pw-section">
           <div className="pw-row">
@@ -374,15 +477,44 @@ export default function CardDetailScreen({
       <CardPhotos card={card} onUpdateCard={onUpdateCard} />
 
       {!openLoop && (
-        <div className="pw-barcode">
-          <div className="pw-barcode-label">Scan at register</div>
+        <button
+          className="pw-barcode pw-barcode-cta"
+          onClick={() => setScanOpen(true)}
+        >
+          <div className="pw-barcode-label">Tap to scan at register</div>
           <Barcode value={card.number} />
-        </div>
+          <div className="pw-barcode-cta-hint">Opens fullscreen scan view</div>
+        </button>
       )}
 
-      <button className="pw-delete" onClick={handleDelete}>
-        Remove card
-      </button>
+      <div className="pw-detail-actions">
+        {card.archived ? (
+          <button
+            className="pw-secondary-action"
+            onClick={() => onRestore(card.id)}
+          >
+            Restore card
+          </button>
+        ) : (
+          <button
+            className="pw-secondary-action"
+            onClick={() => onArchive(card.id)}
+          >
+            Archive card
+          </button>
+        )}
+        <button className="pw-delete" onClick={handleDelete}>
+          Remove card
+        </button>
+      </div>
+
+      {scanOpen && (
+        <FullscreenBarcode
+          card={card}
+          onClose={() => setScanOpen(false)}
+          onUseCard={handleUseCard}
+        />
+      )}
     </div>
   )
 }
