@@ -37,8 +37,35 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button, input, textarea { font-family: inherit; font-size: inherit; color: inherit; }
-button { cursor: pointer; border: none; background: none; padding: 0; }
+button, input, textarea, select { font-family: inherit; font-size: inherit; color: inherit; }
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  /* Kill the blue mobile tap flash and the default UA focus ring on
+     pointer (mouse/touch) interactions. Keyboard focus is restored
+     below via :focus-visible so accessibility isn't lost. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+}
+button:focus { outline: none; box-shadow: none; }
+button:active { outline: none; box-shadow: none; }
+
+/* Accessible keyboard-only focus ring. Pointer interactions never
+   trigger :focus-visible in modern browsers, so taps stay clean
+   while Tab navigation still gets a visible indicator. */
+button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Same treatment for any focus-trapping element inside our app. */
+a:focus, a:active { outline: none; }
+a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 /* ---- App shell ---- */
 .pw-app {
@@ -439,6 +466,8 @@ button { cursor: pointer; border: none; background: none; padding: 0; }
   color: #B33;
   padding: 8px 18px 0;
   line-height: 1.4;
+  white-space: pre-line;
+  word-break: break-word;
 }
 
 /* ---- Detail screen ---- */
@@ -836,14 +865,20 @@ button { cursor: pointer; border: none; background: none; padding: 0; }
 
 /* Kill any browser-default focus ring / active dot on the tab itself
    and on every state. We render our own active highlight via the
-   .pw-bottomnav-icon pill, so no other indicator should ever appear. */
+   .pw-bottomnav-icon pill, so no other indicator should ever appear.
+   :focus-visible is included intentionally — the active-tab pill
+   (mint background on .pw-bottomnav-icon) already serves as the
+   focus indicator for keyboard users on this control. */
+.pw-bottomnav-tab,
 .pw-bottomnav-tab:focus,
 .pw-bottomnav-tab:focus-visible,
+.pw-bottomnav-tab:focus-within,
 .pw-bottomnav-tab:active,
 .pw-bottomnav-tab:hover {
-  outline: none;
-  box-shadow: none;
+  outline: none !important;
+  box-shadow: none !important;
   background: transparent;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .pw-bottomnav-tab::before,
@@ -1211,21 +1246,440 @@ button { cursor: pointer; border: none; background: none; padding: 0; }
   gap: 8px;
 }
 
-/* ---- Toast ---- */
+/* ---- Auth screen ---- */
+.pw-auth-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bone);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top) + 24px) 20px
+    calc(env(safe-area-inset-bottom) + 24px);
+}
+
+.pw-auth-shell {
+  width: 100%;
+  max-width: 380px;
+}
+
+.pw-auth-brand {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.pw-auth-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: var(--mint);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.pw-auth-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0 0 6px;
+  color: var(--ink);
+}
+
+.pw-auth-tagline {
+  font-size: 14px;
+  color: var(--ink-60);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.pw-auth-tabs {
+  display: flex;
+  background: var(--ink-08);
+  border-radius: 999px;
+  padding: 4px;
+  margin-bottom: 18px;
+}
+
+.pw-auth-tab {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-60);
+  transition: background 0.15s, color 0.15s;
+}
+
+.pw-auth-tab.active {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(25, 18, 61, 0.06);
+}
+
+.pw-auth-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.pw-auth-cta {
+  margin-top: 4px;
+  width: 100%;
+}
+
+.pw-auth-cta:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pw-auth-info {
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--mint);
+  padding: 10px 14px;
+  border-radius: 12px;
+  line-height: 1.5;
+  margin: 4px 0 8px;
+}
+
+.pw-auth-hint {
+  text-align: center;
+  padding: 14px 4px 0;
+}
+
+/* ---- Loading state ---- */
+.pw-loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-60);
+  font-size: 14px;
+}
+
+/* ---- Profile screen (real version) ---- */
+.pw-profile-account {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  border: 1px solid var(--ink-08);
+}
+
+.pw-profile-account .pw-profile-illo {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  flex-shrink: 0;
+}
+
+.pw-profile-account-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pw-profile-account-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-60);
+  font-weight: 500;
+}
+
+.pw-profile-account-email {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  word-break: break-all;
+}
+
+.pw-signout-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--ink-08);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 15px;
+  transition: background 0.15s, transform 0.15s;
+}
+.pw-signout-btn:active { transform: scale(0.98); }
+.pw-signout-btn:hover { background: var(--ink-15); }
+
+.pw-privacy-note {
+  font-size: 12px;
+  color: var(--ink-60);
+  text-align: center;
+  margin: 18px 0 0;
+  line-height: 1.5;
+}
+
+/* ---- Birthday section (used both inline on wallet + on profile) ---- */
+.pw-birthday-onboarding-wrap {
+  padding: 0 20px 24px;
+}
+
+.pw-birthday-card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--ink-08);
+  box-shadow: 0 1px 2px rgba(25, 18, 61, 0.04);
+}
+
+.pw-birthday-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pw-birthday-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--ink);
+}
+
+.pw-birthday-sub {
+  font-size: 13px;
+  color: var(--ink-60);
+  margin: 0;
+  line-height: 1.45;
+}
+
+.pw-birthday-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.pw-birthday-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pw-birthday-field span {
+  font-size: 11px;
+  color: var(--ink-60);
+  font-weight: 500;
+}
+
+.pw-birthday-field select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--ink-08);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  outline: none;
+  width: 100%;
+  transition: border 0.15s, background 0.15s;
+}
+.pw-birthday-field select:focus {
+  border-color: var(--ink);
+  background: #fff;
+}
+
+.pw-birthday-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.pw-birthday-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ink);
+  flex-shrink: 0;
+}
+
+.pw-birthday-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---- Photo viewer (fullscreen) ---- */
+.pw-photo-preview-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  -webkit-tap-highlight-color: transparent;
+}
+.pw-photo-preview-btn:focus,
+.pw-photo-preview-btn:active {
+  outline: none;
+}
+.pw-photo-preview-btn:focus-visible .pw-photo-preview-img {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.pw-photo-viewer {
+  position: fixed;
+  inset: 0;
+  background: rgba(25, 18, 61, 0.94);
+  z-index: 260;
+  display: flex;
+  flex-direction: column;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px
+    calc(env(safe-area-inset-bottom) + 20px);
+  animation: pw-fade 0.2s ease-out;
+}
+
+.pw-photo-viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--bone);
+  margin-bottom: 8px;
+}
+
+.pw-photo-viewer-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.pw-photo-viewer-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--bone);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, transform 0.15s;
+}
+.pw-photo-viewer-close:hover { background: rgba(255, 255, 255, 0.2); }
+.pw-photo-viewer-close:active { transform: scale(0.94); }
+
+.pw-photo-viewer-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 8px 0;
+}
+
+.pw-photo-viewer-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pw-photo-viewer-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.pw-photo-viewer-actions .pw-modal-btn {
+  flex: 1;
+  padding: 14px 16px;
+}
+
+.pw-photo-viewer-actions .pw-photo-viewer-replace {
+  background: var(--bone);
+  color: var(--ink);
+}
+.pw-photo-viewer-actions .pw-photo-viewer-replace:hover {
+  background: #fff;
+}
+
+.pw-photo-viewer-actions .pw-photo-viewer-remove {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--bone);
+}
+.pw-photo-viewer-actions .pw-photo-viewer-remove:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.pw-photo-viewer-busy {
+  text-align: center;
+  font-size: 13px;
+  color: rgba(243, 238, 232, 0.7);
+  padding-top: 8px;
+}
+
+/* ---- Toast ----
+   The hidden state combines a translateY large enough to clear the
+   safe-area home indicator AND opacity:0 + visibility:hidden as a
+   belt-and-braces guarantee that an inactive toast can never sit
+   half-on-screen behind the bottom nav.
+   z-index sits above the bottom nav (90) so the visible state floats
+   cleanly above the chrome instead of being clipped by it. */
 .pw-toast {
   position: fixed;
   bottom: calc(env(safe-area-inset-bottom) + 24px);
   left: 50%;
-  transform: translateX(-50%) translateY(120%);
+  transform: translateX(-50%) translateY(calc(100% + 120px));
   background: var(--ink);
   color: var(--bone);
   padding: 12px 20px;
   border-radius: 999px;
   font-size: 14px;
   font-weight: 500;
-  transition: transform 0.3s;
-  z-index: 100;
+  z-index: 220;
   pointer-events: none;
   white-space: nowrap;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  /* Delay the visibility:hidden flip until after the slide-out so the
+     transition is still smooth. On entry, visibility flips immediately. */
+  transition:
+    transform 0.3s ease-out,
+    opacity 0.2s ease-out,
+    visibility 0s linear 0.3s;
 }
-.pw-toast.show { transform: translateX(-50%) translateY(0); }
+
+.pw-toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    transform 0.3s ease-out,
+    opacity 0.18s ease-out,
+    visibility 0s linear 0s;
+}
+
+/* Lift the toast above the bottom nav whenever the nav is mounted so
+   the two never share the same vertical strip. 76px = bottom nav height
+   accounted for elsewhere in the app. */
+.pw-app.has-bottomnav .pw-toast {
+  bottom: calc(env(safe-area-inset-bottom) + 76px + 16px);
+}

@@ -257,27 +257,58 @@ export const cardMaskedNumber = (card) => {
 export const formatNumber = (num) =>
   (num || '').replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim()
 
-// Extract the numeric value from a balance string like "$47.50" or "47.5".
-// Returns null if there's no number.
-export const balanceNumeric = (b) => {
-  if (b === null || b === undefined || b === '') return null
-  const num = String(b).replace(/[^0-9.]/g, '')
-  const n = parseFloat(num)
-  return isNaN(n) ? null : n
+// --- Currency: single source of truth ------------------------------
+// Two helpers, used everywhere. Anything money-shaped that crosses
+// into Supabase or comes back out is funnelled through these so we
+// never store a formatted string in a numeric column again.
+
+// Sanitize anything the user (or legacy data) might hand us into a
+// raw JS number. Strips $, commas, spaces, and any other non-numeric
+// junk. Returns null when the input has no usable digits — null is
+// the right shape for an empty Postgres numeric column.
+//
+//   sanitizeCurrencyInput('$65.00')  → 65
+//   sanitizeCurrencyInput('1,250.5') → 1250.5
+//   sanitizeCurrencyInput(65)        → 65
+//   sanitizeCurrencyInput('')        → null
+//   sanitizeCurrencyInput(null)      → null
+//   sanitizeCurrencyInput('abc')     → null
+export const sanitizeCurrencyInput = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const cleaned = String(value).replace(/[^0-9.\-]/g, '')
+  if (!cleaned || cleaned === '-' || cleaned === '.') return null
+  const n = parseFloat(cleaned)
+  return Number.isNaN(n) ? null : n
 }
 
-// Guess the currency symbol. Defaults to $ — change if users ask.
+// Format a number (or any sanitizable value) for display: "$65.00".
+// `fallback` is what to show when there's nothing to format.
+export const formatCurrency = (value, { fallback = '' } = {}) => {
+  const n = sanitizeCurrencyInput(value)
+  if (n === null) return fallback
+  return '$' + n.toFixed(2)
+}
+
+// Back-compat alias — older code in the codebase still imports this name.
+export const balanceNumeric = sanitizeCurrencyInput
+
+// Currency-symbol guess from a (possibly legacy) string. Always returns
+// '$' for numeric input or anything we don't recognise. Kept so older
+// rows that still hold a "£20.00" string render with the right glyph.
 export const balanceSymbol = (b) => {
-  if (!b) return '$'
-  const s = String(b).trim()
+  if (b === null || b === undefined) return '$'
+  if (typeof b !== 'string') return '$'
+  const s = b.trim()
   return /^[\$£€¥]/.test(s) ? s.charAt(0) : '$'
 }
 
-// Pretty-format a balance for display: "$47.50"
+// Pretty-format a balance for display: "$47.50". Now a thin shim over
+// formatCurrency so all formatting goes through one path.
 export const formatBalance = (b) => {
-  const n = balanceNumeric(b)
+  const n = sanitizeCurrencyInput(b)
   if (n === null) return null
-  return balanceSymbol(b) + n.toFixed(2)
+  return formatCurrency(n)
 }
 
 // Basic HTML escape — used when we inject merchant names anywhere
@@ -326,16 +357,21 @@ export const haptic = (pattern) => {
 // balance is always derived, never stored directly, so removing
 // a transaction automatically restores the correct total.
 export const computeBalance = (card) => {
-  if (card.startingBalance === null || card.startingBalance === undefined) {
-    return null
-  }
-  const spent = (card.transactions || []).reduce((a, t) => a + t.amount, 0)
-  return Math.max(0, card.startingBalance - spent)
+  // Tolerant to legacy rows where startingBalance might still be a
+  // formatted string like "$65.00" — sanitize before doing math so a
+  // bad shape can never crash the wallet.
+  const start = sanitizeCurrencyInput(card.startingBalance)
+  if (start === null) return null
+  const spent = (card.transactions || []).reduce(
+    (a, t) => a + (sanitizeCurrencyInput(t.amount) || 0),
+    0
+  )
+  return Math.max(0, start - spent)
 }
 
 // Get the display-ready balance string for a card.
 export const cardBalanceDisplay = (card) => {
   const n = computeBalance(card)
   if (n === null) return null
-  return balanceSymbol(card.balance) + n.toFixed(2)
+  return formatCurrency(n)
 }

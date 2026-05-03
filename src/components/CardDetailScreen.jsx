@@ -7,10 +7,11 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import Barcode from './Barcode.jsx'
 import PhotoInput from './PhotoInput.jsx'
+import PhotoViewerModal from './PhotoViewerModal.jsx'
 import ColorPicker from './ColorPicker.jsx'
 import {
   formatNumber,
-  balanceSymbol,
+  formatCurrency,
   cardBalanceDisplay,
   computeBalance,
   relativeTime,
@@ -52,6 +53,8 @@ function CardPhotos({ card, onUpdateCard }) {
   const [urls, setUrls] = useState({ front: null, back: null })
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
+  // null | 'front' | 'back' — which photo (if any) is open in the viewer.
+  const [viewing, setViewing] = useState(null)
 
   const urlsRef = useRef(urls)
   urlsRef.current = urls
@@ -124,25 +127,55 @@ function CardPhotos({ card, onUpdateCard }) {
     }
   }
 
+  // Replace from inside the viewer: same code path as the inline
+  // "Replace" button, just initiated from the fullscreen modal.
+  const handleReplaceFromViewer = async (side, file) => {
+    await handleFile(side, file)
+  }
+
+  // Remove from inside the viewer: clear the photo, then close.
+  const handleRemoveFromViewer = async (side) => {
+    await handleRemove(side)
+    setViewing(null)
+  }
+
+  const viewerSide = viewing
+  const viewerUrl = viewerSide ? urls[viewerSide] : null
+
   return (
-    <div className="pw-photos-section">
-      <div className="pw-photos-section-title">Card photos</div>
-      <PhotoInput
-        label="Front photo"
-        previewUrl={urls.front}
-        onFileSelected={(f) => handleFile('front', f)}
-        onRemove={() => handleRemove('front')}
-        busy={busy === 'front'}
-      />
-      <PhotoInput
-        label="Back photo"
-        previewUrl={urls.back}
-        onFileSelected={(f) => handleFile('back', f)}
-        onRemove={() => handleRemove('back')}
-        busy={busy === 'back'}
-      />
-      {error && <p className="pw-error">{error}</p>}
-    </div>
+    <>
+      <div className="pw-photos-section">
+        <div className="pw-photos-section-title">Card photos</div>
+        <PhotoInput
+          label="Front photo"
+          previewUrl={urls.front}
+          onFileSelected={(f) => handleFile('front', f)}
+          onRemove={() => handleRemove('front')}
+          onPreviewClick={urls.front ? () => setViewing('front') : undefined}
+          busy={busy === 'front'}
+        />
+        <PhotoInput
+          label="Back photo"
+          previewUrl={urls.back}
+          onFileSelected={(f) => handleFile('back', f)}
+          onRemove={() => handleRemove('back')}
+          onPreviewClick={urls.back ? () => setViewing('back') : undefined}
+          busy={busy === 'back'}
+        />
+        {error && <p className="pw-error">{error}</p>}
+      </div>
+
+      {viewerSide && viewerUrl && (
+        <PhotoViewerModal
+          imageUrl={viewerUrl}
+          title={viewerSide === 'front' ? 'Front photo' : 'Back photo'}
+          busy={busy === viewerSide}
+          onClose={() => setViewing(null)}
+          onReplaceFile={(file) => handleReplaceFromViewer(viewerSide, file)}
+          onRemove={() => handleRemoveFromViewer(viewerSide)}
+        />
+      )}
+    </>
   )
 }
 
@@ -170,8 +203,6 @@ function SpendingTracker({ card, onDeduct, onUndo, autoFocus }) {
     () => (card.transactions || []).slice().sort((a, b) => b.date - a.date),
     [card.transactions]
   )
-
-  const sym = balanceSymbol(card.balance)
 
   return (
     <div className="pw-section" id="pw-spending-tracker">
@@ -206,8 +237,7 @@ function SpendingTracker({ card, onDeduct, onUndo, autoFocus }) {
             <div className="pw-tx-row" key={t.id}>
               <div className="pw-tx-left">
                 <div className="pw-tx-amount">
-                  − {sym}
-                  {t.amount.toFixed(2)}
+                  − {formatCurrency(t.amount)}
                 </div>
                 <div className="pw-tx-date">{relativeTime(t.date)}</div>
               </div>

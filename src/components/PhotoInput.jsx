@@ -14,6 +14,7 @@ export default function PhotoInput({
   onFileSelected,
   onRemove,
   busy,
+  onPreviewClick,
 }) {
   // One hidden input with no `capture` attribute — on iOS and
   // Android this surfaces the native sheet that lets the user pick
@@ -37,11 +38,27 @@ export default function PhotoInput({
 
       {previewUrl ? (
         <div className="pw-photo-preview-wrap">
-          <img
-            src={previewUrl}
-            alt={label || addLabel}
-            className="pw-photo-preview-img"
-          />
+          {onPreviewClick ? (
+            <button
+              type="button"
+              className="pw-photo-preview-btn"
+              onClick={onPreviewClick}
+              disabled={busy}
+              aria-label={'Open ' + (label || addLabel).toLowerCase()}
+            >
+              <img
+                src={previewUrl}
+                alt={label || addLabel}
+                className="pw-photo-preview-img"
+              />
+            </button>
+          ) : (
+            <img
+              src={previewUrl}
+              alt={label || addLabel}
+              className="pw-photo-preview-img"
+            />
+          )}
           <div className="pw-photo-actions">
             <button
               type="button"

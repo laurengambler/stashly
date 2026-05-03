@@ -16,8 +16,7 @@ import PhotoInput from './PhotoInput.jsx'
 import ColorPicker from './ColorPicker.jsx'
 import {
   uid,
-  balanceNumeric,
-  balanceSymbol,
+  sanitizeCurrencyInput,
   classifyCardNumber,
   CARD_KIND,
   CARD_BRAND,
@@ -225,14 +224,12 @@ export default function AddCardScreen({ onCancel, onSave }) {
     })
   }
 
-  // Build the normalized balance once — same logic used for both flows.
+  // The user can type "$65.00", "65", "1,250.5" — sanitizeCurrencyInput
+  // strips the formatting and returns a raw JS number (or null) which is
+  // exactly what the Postgres numeric columns expect.
   const buildBalanceFields = () => {
-    const startingBalance = balanceNumeric(balance)
-    const normalizedBalance =
-      startingBalance !== null
-        ? balanceSymbol(balance) + startingBalance.toFixed(2)
-        : ''
-    return { startingBalance, normalizedBalance }
+    const startingBalance = sanitizeCurrencyInput(balance)
+    return { startingBalance }
   }
 
   // Write the pending photo blobs (if any) to IndexedDB and return
@@ -259,17 +256,32 @@ export default function AddCardScreen({ onCancel, onSave }) {
   const commitCard = async () => {
     setSaving(true)
     setSaveError(null)
+    let photoIds
     try {
-      const photoIds = await persistPhotos()
-      const { startingBalance, normalizedBalance } = buildBalanceFields()
-      if (pendingOpenLoop) {
-        onSave({
+      photoIds = await persistPhotos()
+    } catch (err) {
+      console.warn('Could not save card photos', err)
+      setSaveError(
+        'Could not save photos to this device. Please try again, or remove the photos to save without them.'
+      )
+      setSaving(false)
+      setModal(null)
+      return
+    }
+
+    const { startingBalance } = buildBalanceFields()
+    // Both `balance` and `starting_balance` are numeric columns now.
+    // We seed them with the same value at creation; `balance` exists
+    // mainly for read-side compatibility and analytics, while
+    // `startingBalance` is the source of truth for spend math.
+    const cardPayload = pendingOpenLoop
+      ? {
           id: uid(),
           kind: CARD_KIND.OPEN_LOOP_PREPAID,
           brand: pendingOpenLoop.brand,
           merchant: merchant.trim(),
           last4: pendingOpenLoop.last4,
-          balance: normalizedBalance,
+          balance: startingBalance,
           startingBalance,
           transactions: [],
           notes: notes.trim(),
@@ -279,16 +291,15 @@ export default function AddCardScreen({ onCancel, onSave }) {
           favorite: false,
           archived: false,
           createdAt: Date.now(),
-        })
-      } else {
-        onSave({
+        }
+      : {
           id: uid(),
           kind: CARD_KIND.MERCHANT_GIFT_CARD,
           brand: CARD_BRAND.UNKNOWN,
           merchant: merchant.trim(),
           number: number.replace(/\s/g, ''),
           pin: pin.trim(),
-          balance: normalizedBalance,
+          balance: startingBalance,
           startingBalance,
           transactions: [],
           notes: notes.trim(),
@@ -298,13 +309,26 @@ export default function AddCardScreen({ onCancel, onSave }) {
           favorite: false,
           archived: false,
           createdAt: Date.now(),
-        })
-      }
+        }
+
+    try {
+      // Diagnostic: log the exact object being handed off to the
+      // parent (and from there into the Supabase insert) so we can
+      // see every field on the way out.
+      console.log('[AddCardScreen] cardPayload →', cardPayload)
+      // Actually awaiting the parent here is what was missing before:
+      // without it, a Supabase error caused the modal to hang on
+      // "Saving…" forever and the user had no idea why nothing happened.
+      await onSave(cardPayload)
+      // Success: parent unmounts this screen by switching to wallet.
     } catch (err) {
-      console.warn('Could not save card photos', err)
-      setSaveError(
-        'Could not save photos to this device. Please try again, or remove the photos to save without them.'
-      )
+      // The parent has already logged the full error object to the
+      // browser console under [insertCard]. Show the human-readable
+      // bits inline so the user knows what to do.
+      const code = err?.code ? ` [${err.code}]` : ''
+      const message = err?.message || 'Could not save card. Please try again.'
+      const hint = err?.hint ? `\nHint: ${err.hint}` : ''
+      setSaveError(`Save failed${code}: ${message}${hint}`)
       setSaving(false)
       setModal(null)
     }
