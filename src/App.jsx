@@ -330,9 +330,12 @@ export default function App() {
 
   const handleSaveProfile = async (updates) => {
     if (!user) return
+    // Saving counts as completing onboarding so the inline prompt on
+    // the wallet doesn't reappear on the next visit.
     const merged = {
       ...(profile || {}),
       ...updates,
+      onboardingCompleted: true,
     }
     try {
       const saved = await upsertProfile(user.id, merged)
@@ -358,12 +361,13 @@ export default function App() {
     try {
       const saved = await upsertProfile(user.id, {
         ...(profile || {}),
-        birthdayPromptDismissed: true,
+        onboardingCompleted: true,
       })
       setProfile(saved)
       track('profile_birthday_skipped', { user_id: user.id })
     } catch (err) {
-      console.warn('Could not dismiss birthday prompt', err)
+      logSupabaseError('upsertProfile (skip)', err)
+      showToast('Skip failed: ' + describeSupabaseError(err))
     }
   }
 
@@ -412,11 +416,10 @@ export default function App() {
 
   // Show the birthday onboarding card on the wallet only when the user
   // has not yet saved or dismissed it.
+  // The onboarding card stays out of the way once the user has either
+  // saved a birthday or hit Skip — both paths flip onboarding_completed.
   const showBirthdayOnboarding =
-    profileLoaded &&
-    !!user &&
-    !profile?.birthdayMonth &&
-    !profile?.birthdayPromptDismissed
+    profileLoaded && !!user && !profile?.onboardingCompleted
 
   // --- Render ----------------------------------------------------
 
