@@ -233,16 +233,19 @@ export default function App() {
 
   const persistUpdate = useCallback(
     async (cardId, updates, { silent = false } = {}) => {
-      // Optimistic local update.
-      setCards((prev) =>
-        prev.map((c) => (c.id === cardId ? { ...c, ...updates } : c))
-      )
+      // Snapshot the card *before* the optimistic update so cardsApi
+      // can derive the new current_balance from the prior state when
+      // it needs to (transactions or starting_balance changed).
+      let snapshot = null
+      setCards((prev) => {
+        snapshot = prev.find((c) => c.id === cardId) || null
+        return prev.map((c) => (c.id === cardId ? { ...c, ...updates } : c))
+      })
       try {
-        await updateCard(cardId, updates)
+        await updateCard(cardId, updates, snapshot)
       } catch (err) {
-        console.warn('Could not save card change', err)
-        if (!silent) showToast('Could not save change')
-        // Best-effort re-sync.
+        logSupabaseError('updateCard', err)
+        if (!silent) showToast('Save failed: ' + describeSupabaseError(err))
         try {
           const fresh = await fetchCards()
           setCards(fresh)
@@ -330,15 +333,17 @@ export default function App() {
 
   const handleSaveProfile = async (updates) => {
     if (!user) return
-    // Saving counts as completing onboarding so the inline prompt on
-    // the wallet doesn't reappear on the next visit.
+    // Saving counts as dismissing the prompt — both the canonical
+    // birthday_prompt_dismissed flag and its onboarding_completed
+    // mirror are flipped via profileApi.
     const merged = {
       ...(profile || {}),
       ...updates,
+      birthdayPromptDismissed: true,
       onboardingCompleted: true,
     }
     try {
-      const saved = await upsertProfile(user.id, merged)
+      const saved = await upsertProfile(user.id, user.email, merged)
       setProfile(saved)
       showToast('Saved')
       track('profile_birthday_saved', {
@@ -359,8 +364,9 @@ export default function App() {
   const handleSkipBirthday = async () => {
     if (!user) return
     try {
-      const saved = await upsertProfile(user.id, {
+      const saved = await upsertProfile(user.id, user.email, {
         ...(profile || {}),
+        birthdayPromptDismissed: true,
         onboardingCompleted: true,
       })
       setProfile(saved)
@@ -417,9 +423,10 @@ export default function App() {
   // Show the birthday onboarding card on the wallet only when the user
   // has not yet saved or dismissed it.
   // The onboarding card stays out of the way once the user has either
-  // saved a birthday or hit Skip — both paths flip onboarding_completed.
+  // saved a birthday or hit Skip — both paths flip the canonical
+  // birthday_prompt_dismissed flag (mirrored to onboarding_completed).
   const showBirthdayOnboarding =
-    profileLoaded && !!user && !profile?.onboardingCompleted
+    profileLoaded && !!user && !profile?.birthdayPromptDismissed
 
   // --- Render ----------------------------------------------------
 
