@@ -71,6 +71,8 @@ function CardListItem({ card, onOpen, onArchive, onToggleFavorite }) {
       className="pw-swipe-card"
       leftActions={leftActions}
       rightActions={rightActions}
+      onLeftAction={() => onArchive(card.id)}
+      onRightAction={() => onToggleFavorite(card.id)}
       onTap={() => onOpen(card.id)}
     >
       <div
@@ -128,13 +130,18 @@ function EmptyState({ onAdd }) {
           <path d="M7 16h3" />
         </svg>
       </div>
-      <h2 className="pw-empty-title">Your wallet is ready</h2>
+      <h2 className="pw-empty-title">Add your first gift card</h2>
       <p className="pw-empty-body">
-        Add your first gift card and it will live here — no accounts, no
-        cloud, just your cards.
+        Never lose a gift card again — keep every card and balance in one
+        premium wallet.
       </p>
-      <button className="pw-empty-cta" onClick={onAdd}>
-        Add a card
+      <button className="pw-empty-cta-lg" onClick={onAdd}>
+        <span className="pw-empty-cta-plus" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </span>
+        Add your first card
       </button>
     </div>
   )

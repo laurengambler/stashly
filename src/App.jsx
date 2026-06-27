@@ -64,6 +64,7 @@ export default function App() {
   const [cardsLoaded, setCardsLoaded] = useState(false)
   const [activeCardId, setActiveCardId] = useState(null)
   const [pendingArchive, setPendingArchive] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
   const [toast, setToast] = useState({ message: '', visible: false })
 
   const [profile, setProfile] = useState(null)
@@ -199,6 +200,7 @@ export default function App() {
 
   const handleSkipMigration = () => {
     localStorage.setItem(MIGRATION_DECISION_KEY, 'skipped')
+    track('migration_skipped', { user_id: user?.id, count: migration?.localCards?.length ?? 0 })
     setMigration(null)
   }
 
@@ -309,12 +311,14 @@ export default function App() {
     track('card_unarchived', { user_id: user?.id, brand: safeBrand(card) })
   }
 
-  const handleDelete = async (cardId) => {
+  // Core deletion: optimistic local removal, photo cleanup, then the
+  // server delete (re-reading on failure). No navigation — callers
+  // decide where to go.
+  const performDelete = async (cardId) => {
     const removed = cards.find((c) => c.id === cardId)
     setCards((prev) => prev.filter((c) => c.id !== cardId))
-    setActiveCardId(null)
-    setScreen('wallet')
-    showToast('Card removed')
+    showToast('Card deleted')
+    track('card_deleted', { user_id: user?.id, brand: safeBrand(removed) })
     if (removed?.frontPhotoId) deletePhoto(removed.frontPhotoId).catch(() => {})
     if (removed?.backPhotoId) deletePhoto(removed.backPhotoId).catch(() => {})
     try {
@@ -327,6 +331,41 @@ export default function App() {
         setCards(fresh)
       } catch {}
     }
+  }
+
+  // Delete is always gated behind the styled confirm dialog, used by
+  // both the detail-screen "Remove card" and the archive-row Delete.
+  const requestDelete = (cardId) => setPendingDelete({ id: cardId })
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    const id = pendingDelete.id
+    const card = cards.find((c) => c.id === id)
+    setPendingDelete(null)
+    // If we're deleting the card currently open in detail, leave that
+    // screen for the list it belongs to.
+    if (activeCardId === id) {
+      setActiveCardId(null)
+      setScreen(card?.archived ? 'archives' : 'wallet')
+    }
+    await performDelete(id)
+  }
+
+  // Open the add-card form in edit mode, pre-filled with this card.
+  const handleEditCard = (cardId) => {
+    setActiveCardId(cardId)
+    setScreen('edit')
+    track('card_edit_started', { user_id: user?.id })
+  }
+
+  // Persist edits from the reused form, then return to the detail screen.
+  const handleSaveEdit = async (updates) => {
+    const id = activeCardId
+    if (!id) return
+    setScreen('detail')
+    showToast('Card updated')
+    track('card_edited', { user_id: user?.id })
+    await persistUpdate(id, updates)
   }
 
   // --- Profile ---------------------------------------------------
@@ -418,6 +457,7 @@ export default function App() {
   const handleTabChange = (tabId) => {
     setActiveCardId(null)
     setScreen(tabId)
+    track('tab_changed', { tab: tabId, user_id: user?.id })
   }
 
   // Show the birthday onboarding card on the wallet only when the user
@@ -448,7 +488,7 @@ export default function App() {
         <>
           <WalletScreen
             cards={activeCards}
-            onAdd={() => setScreen('add')}
+            onAdd={() => { setScreen('add'); track('card_add_started', { user_id: user?.id }) }}
             onOpen={handleOpenCard}
             onArchive={requestArchive}
             onToggleFavorite={handleToggleFavorite}
@@ -471,6 +511,7 @@ export default function App() {
           cards={archivedCards}
           onRestore={handleRestore}
           onOpen={handleOpenCard}
+          onDelete={requestDelete}
         />
       )}
 
@@ -489,6 +530,14 @@ export default function App() {
         />
       )}
 
+      {screen === 'edit' && activeCard && (
+        <AddCardScreen
+          editCard={activeCard}
+          onCancel={() => setScreen('detail')}
+          onSave={handleSaveEdit}
+        />
+      )}
+
       {screen === 'detail' && activeCard && (
         <CardDetailScreen
           card={activeCard}
@@ -496,11 +545,12 @@ export default function App() {
           onBack={() => setScreen(activeCard.archived ? 'archives' : 'wallet')}
           onDeduct={handleDeduct}
           onUndo={handleUndo}
-          onDelete={handleDelete}
+          onDelete={requestDelete}
           onUpdateCard={handleUpdateCard}
           onArchive={requestArchive}
           onToggleFavorite={handleToggleFavorite}
           onRestore={handleRestore}
+          onEdit={handleEditCard}
         />
       )}
 
@@ -516,6 +566,18 @@ export default function App() {
           cancelLabel="Cancel"
           onConfirm={confirmArchive}
           onCancel={() => setPendingArchive(null)}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmModal
+          title="Delete this card?"
+          body="This permanently removes the card and its details. This can't be undone."
+          confirmLabel="Delete"
+          cancelLabel="Cancel"
+          destructive
+          onConfirm={confirmDelete}
+          onCancel={() => setPendingDelete(null)}
         />
       )}
 

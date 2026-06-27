@@ -13,6 +13,17 @@ import { identifyUser, resetUser, track } from './posthog.js'
 
 const AuthContext = createContext(null)
 
+// Person properties we send to PostHog so users are segmentable.
+// Email always exists on the Supabase auth user; name is only present
+// if it was set in user_metadata (we omit it otherwise rather than
+// sending an empty value).
+const personProps = (user) => {
+  const props = { email: user.email }
+  const name = user.user_metadata?.name || user.user_metadata?.full_name
+  if (name) props.name = name
+  return props
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -24,13 +35,15 @@ export function AuthProvider({ children }) {
       if (cancelled) return
       setSession(data.session ?? null)
       setLoading(false)
-      if (data.session?.user) identifyUser(data.session.user.id)
+      if (data.session?.user) {
+        identifyUser(data.session.user.id, personProps(data.session.user))
+      }
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession ?? null)
       if (newSession?.user) {
-        identifyUser(newSession.user.id)
+        identifyUser(newSession.user.id, personProps(newSession.user))
       } else {
         resetUser()
       }

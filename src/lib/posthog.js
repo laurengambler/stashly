@@ -26,6 +26,7 @@ export const initPostHog = () => {
     capture_pageview: true,
     persistence: 'localStorage',
     autocapture: false,
+    enableExceptionAutocapture: true,
   })
   _ready = true
 }

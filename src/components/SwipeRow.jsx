@@ -13,6 +13,8 @@ export default function SwipeRow({
   children,
   leftActions = null,    // revealed when user swipes RIGHT (finger moves right)
   rightActions = null,   // revealed when user swipes LEFT
+  onLeftAction = null,   // fired when a RIGHT swipe crosses the threshold
+  onRightAction = null,  // fired when a LEFT swipe crosses the threshold
   className = '',
   onTap,
 }) {
@@ -65,16 +67,16 @@ export default function SwipeRow({
   const handleEnd = () => {
     if (!dragging.current) return
     dragging.current = false
+    // Fire the side's action once the swipe crosses the threshold...
     if (offset > THRESHOLD && leftActions) {
-      setLatched(1)
-      setOffset(THRESHOLD)
+      if (onLeftAction) onLeftAction()
     } else if (offset < -THRESHOLD && rightActions) {
-      setLatched(-1)
-      setOffset(-THRESHOLD)
-    } else {
-      setLatched(0)
-      setOffset(0)
+      if (onRightAction) onRightAction()
     }
+    // ...then always settle back to the closed resting position so the
+    // card never stays stuck half-swiped on release.
+    setLatched(0)
+    setOffset(0)
   }
 
   const handleClick = (e) => {

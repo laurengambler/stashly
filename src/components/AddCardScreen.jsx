@@ -28,6 +28,7 @@ import {
   deletePhoto,
   newPhotoId,
 } from '../lib/photoStorage.js'
+import { track } from '../lib/posthog.js'
 
 // Inline confirmation shown when a Visa/Mastercard PAN is detected.
 // Continuing commits a limited-storage card; cancelling returns the
@@ -159,13 +160,25 @@ const formatCardNumber = (value) => {
   return digits.replace(/(.{4})(?=.)/g, '$1 ')
 }
 
-export default function AddCardScreen({ onCancel, onSave }) {
-  const [merchant, setMerchant] = useState('')
-  const [number, setNumber] = useState('')
-  const [pin, setPin] = useState('')
-  const [balance, setBalance] = useState('')
-  const [notes, setNotes] = useState('')
-  const [color, setColor] = useState(CARD_COLORS[0])
+export default function AddCardScreen({ onCancel, onSave, editCard = null }) {
+  // When editCard is provided we reuse this whole form for editing an
+  // existing card instead of creating a new one. Open-loop prepaid cards
+  // only store a last-4 reference (no PAN/PIN), so those two fields are
+  // hidden when editing one.
+  const isEditing = !!editCard
+  const isOpenLoopEdit =
+    isEditing && editCard.kind === CARD_KIND.OPEN_LOOP_PREPAID
+
+  const [merchant, setMerchant] = useState(editCard?.merchant || '')
+  const [number, setNumber] = useState(
+    editCard ? formatCardNumber(editCard.number || '') : ''
+  )
+  const [pin, setPin] = useState(editCard?.pin || '')
+  const [balance, setBalance] = useState(
+    editCard?.startingBalance != null ? String(editCard.startingBalance) : ''
+  )
+  const [notes, setNotes] = useState(editCard?.notes || '')
+  const [color, setColor] = useState(editCard?.color || CARD_COLORS[0])
 
   // Pending photos — { blob, url } while the card hasn't been saved.
   // Only committed to IndexedDB in commitCard().
@@ -203,7 +216,9 @@ export default function AddCardScreen({ onCancel, onSave }) {
     el.style.height = el.scrollHeight + 'px'
   }, [notes])
 
-  const canSave = merchant.trim() && number.trim()
+  // Number is required for new cards and merchant-card edits, but not
+  // for open-loop edits (which have no editable PAN).
+  const canSave = merchant.trim() && (isOpenLoopEdit || number.trim())
   const hasAnyPhoto = Boolean(frontPhoto || backPhoto)
 
   const handlePhotoSelected = async (side, file) => {
@@ -254,6 +269,41 @@ export default function AddCardScreen({ onCancel, onSave }) {
   }
 
   const commitCard = async () => {
+    // Edit mode: persist only the changed scalar fields on the existing
+    // card. Photos are managed on the detail screen, and the card's id /
+    // kind / transactions are preserved by the parent's update path.
+    if (isEditing) {
+      setSaving(true)
+      setSaveError(null)
+      const { startingBalance } = buildBalanceFields()
+      const updates = isOpenLoopEdit
+        ? {
+            merchant: merchant.trim(),
+            notes: notes.trim(),
+            color,
+            startingBalance,
+          }
+        : {
+            merchant: merchant.trim(),
+            number: number.replace(/\s/g, ''),
+            pin: pin.trim(),
+            notes: notes.trim(),
+            color,
+            startingBalance,
+          }
+      try {
+        await onSave(updates)
+        // Success: parent returns to the detail screen.
+      } catch (err) {
+        const code = err?.code ? ` [${err.code}]` : ''
+        const message =
+          err?.message || 'Could not save changes. Please try again.'
+        setSaveError(`Save failed${code}: ${message}`)
+        setSaving(false)
+      }
+      return
+    }
+
     setSaving(true)
     setSaveError(null)
     let photoIds
@@ -338,8 +388,15 @@ export default function AddCardScreen({ onCancel, onSave }) {
   // before committing. The confirm modal is the single commit gate.
   const advanceFromForm = () => {
     if (!canSave) return
+    // Editing skips the open-loop re-classification and no-photo prompt
+    // (the card already exists) and saves directly.
+    if (isEditing) {
+      commitCard()
+      return
+    }
     const classification = classifyCardNumber(number)
     if (classification.isOpenLoop) {
+      track('open_loop_card_detected', { brand: classification.brand })
       setPendingOpenLoop(classification)
       setModal('limited')
       return
@@ -370,6 +427,7 @@ export default function AddCardScreen({ onCancel, onSave }) {
   }
 
   const skipPhotoWarning = () => {
+    track('save_without_photo_chosen')
     setModal('confirm')
   }
 
@@ -380,10 +438,10 @@ export default function AddCardScreen({ onCancel, onSave }) {
   return (
     <div className="pw-screen active">
       <div className="pw-form-header">
-        <button className="pw-nav" onClick={onCancel} disabled={saving}>
+        <button className="pw-nav" onClick={() => { track('card_add_cancelled'); onCancel() }} disabled={saving}>
           Cancel
         </button>
-        <h2 className="pw-form-title">Add card</h2>
+        <h2 className="pw-form-title">{isEditing ? 'Edit card' : 'Add card'}</h2>
         <button
           className="pw-nav primary"
           onClick={advanceFromForm}
@@ -407,28 +465,30 @@ export default function AddCardScreen({ onCancel, onSave }) {
           </div>
         </div>
 
-        <div className="pw-group">
-          <div className="pw-field">
-            <label>Card number</label>
-            <input
-              type="text"
-              value={number}
-              onChange={(e) => setNumber(formatCardNumber(e.target.value))}
-              placeholder="Required"
-              autoComplete="off"
-            />
+        {!isOpenLoopEdit && (
+          <div className="pw-group">
+            <div className="pw-field">
+              <label>Card number</label>
+              <input
+                type="text"
+                value={number}
+                onChange={(e) => setNumber(formatCardNumber(e.target.value))}
+                placeholder="Required"
+                autoComplete="off"
+              />
+            </div>
+            <div className="pw-field">
+              <label>PIN</label>
+              <input
+                type="text"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                placeholder="Optional"
+                autoComplete="off"
+              />
+            </div>
           </div>
-          <div className="pw-field">
-            <label>PIN</label>
-            <input
-              type="text"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="Optional"
-              autoComplete="off"
-            />
-          </div>
-        </div>
+        )}
 
         <div className="pw-group">
           <div className="pw-field">
@@ -464,32 +524,50 @@ export default function AddCardScreen({ onCancel, onSave }) {
           </div>
         </div>
 
-        <div className="pw-photos-group">
-          <div className="pw-photos-group-title">Card photos</div>
-          <div className="pw-photos-group-hint">
-            Optional — helps you verify details later.
+        {/* Photos are managed on the card detail screen when editing, so
+            the pending-photo picker only shows when adding a new card. */}
+        {!isEditing && (
+          <div className="pw-photos-group">
+            <div className="pw-photos-group-title">Card photos</div>
+            <div className="pw-photos-group-hint">
+              Optional — helps you verify details later.
+            </div>
+            <PhotoInput
+              addLabel="Front Photo"
+              previewUrl={frontPhoto?.url || null}
+              onFileSelected={(file) => handlePhotoSelected('front', file)}
+              onRemove={() => handlePhotoRemoved('front')}
+              busy={saving}
+            />
+            <PhotoInput
+              addLabel="Back Photo"
+              previewUrl={backPhoto?.url || null}
+              onFileSelected={(file) => handlePhotoSelected('back', file)}
+              onRemove={() => handlePhotoRemoved('back')}
+              busy={saving}
+            />
           </div>
-          <PhotoInput
-            addLabel="Front Photo"
-            previewUrl={frontPhoto?.url || null}
-            onFileSelected={(file) => handlePhotoSelected('front', file)}
-            onRemove={() => handlePhotoRemoved('front')}
-            busy={saving}
-          />
-          <PhotoInput
-            addLabel="Back Photo"
-            previewUrl={backPhoto?.url || null}
-            onFileSelected={(file) => handlePhotoSelected('back', file)}
-            onRemove={() => handlePhotoRemoved('back')}
-            busy={saving}
-          />
-        </div>
+        )}
 
         {saveError && <p className="pw-error">{saveError}</p>}
 
         <p className="pw-hint">
           Stored only on this device. Nothing leaves your browser.
         </p>
+      </div>
+
+      {/* Persistent Save pinned to the bottom of the screen so the action
+          stays reachable no matter how far the form is scrolled. Triggers
+          the same flow as the top-right Save. */}
+      <div className="pw-form-footer">
+        <button
+          type="button"
+          className="pw-form-save"
+          onClick={advanceFromForm}
+          disabled={!canSave || saving}
+        >
+          Save
+        </button>
       </div>
 
       {modal === 'limited' && pendingOpenLoop && (

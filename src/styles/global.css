@@ -265,6 +265,43 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 }
 .pw-empty-cta:active { transform: scale(0.96); }
 
+/* Large, prominent first-card CTA on the wallet empty state. Filled
+   navy with a small lime "+" badge for contrast — the obvious next
+   action for a brand-new user. */
+.pw-empty-cta-lg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 320px;
+  margin-top: 6px;
+  padding: 18px 28px;
+  background: var(--ink);
+  color: var(--bone);
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  box-shadow: 0 10px 26px rgba(25, 18, 61, 0.18);
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.pw-empty-cta-lg:hover { border-color: var(--lime); }
+.pw-empty-cta-lg:active { transform: scale(0.97); }
+
+.pw-empty-cta-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--lime);
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
 /* ---- Form screen ---- */
 .pw-form-header {
   display: flex;
@@ -294,9 +331,39 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 }
 
 .pw-form-body {
-  padding: 20px 20px 40px;
+  /* Extra bottom padding keeps the last fields (photo buttons, hint)
+     clear of the sticky Save footer instead of hiding behind it. */
+  padding: 20px 20px 96px;
   flex: 1;
   overflow-y: auto;
+}
+
+/* Persistent Save footer — sticks to the bottom of the (centered, max
+   480px) column and stays visible regardless of scroll position. */
+.pw-form-footer {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 20px calc(env(safe-area-inset-bottom) + 12px);
+  background: var(--bone);
+  border-top: 0.5px solid var(--ink-15);
+}
+
+.pw-form-save {
+  width: 100%;
+  background: var(--ink);
+  color: var(--bone);
+  padding: 15px 24px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 16px;
+  transition: transform 0.15s;
+}
+
+.pw-form-save:active { transform: scale(0.98); }
+
+.pw-form-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .pw-group {
@@ -585,6 +652,64 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .pw-pin-reveal:active { transform: scale(0.94); }
 .pw-pin-reveal.active { background: var(--mint); color: var(--ink); }
 
+/* ---- Copy card number ---- */
+.pw-copy-btn {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--ink-08);
+  flex-shrink: 0;
+  transition: transform 0.15s, background 0.15s, color 0.15s;
+}
+.pw-copy-btn:active { transform: scale(0.94); }
+.pw-copy-btn.copied { background: var(--mint); color: var(--ink); }
+
+/* ---- $0 balance "archive this?" inline hint (non-blocking) ---- */
+.pw-zero-hint {
+  margin: 0 20px 16px;
+  padding: 12px 14px 12px 16px;
+  background: var(--mint);
+  color: var(--ink);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pw-zero-hint-text {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 500;
+}
+.pw-zero-hint-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.pw-zero-hint-archive {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bone);
+  background: var(--ink);
+  padding: 8px 14px;
+  border-radius: 999px;
+  transition: transform 0.15s;
+}
+.pw-zero-hint-archive:active { transform: scale(0.95); }
+.pw-zero-hint-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-60);
+  padding: 6px;
+  border-radius: 999px;
+  transition: color 0.15s, transform 0.15s;
+}
+.pw-zero-hint-dismiss:active { transform: scale(0.9); }
+
 /* ---- Deduct / track spending ---- */
 .pw-deduct-row {
   display: flex;
@@ -811,6 +936,11 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   color: var(--ink);
 }
 .pw-modal-btn.secondary:hover { background: var(--ink-15); }
+
+.pw-modal-btn.destructive {
+  background: #B33;
+  color: var(--bone);
+}
 
 @keyframes pw-fade {
   from { opacity: 0; }
@@ -1062,9 +1192,17 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   padding: 18px 18px 16px;
 }
 
-.pw-archive-restore {
+.pw-archive-actions {
   flex-shrink: 0;
   width: 78px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pw-archive-restore {
+  flex: 1;
+  width: 100%;
   border-radius: 18px;
   background: var(--ink);
   color: var(--bone);
@@ -1078,6 +1216,23 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   transition: transform 0.15s;
 }
 .pw-archive-restore:active { transform: scale(0.96); }
+
+.pw-archive-delete {
+  flex: 1;
+  width: 100%;
+  border-radius: 18px;
+  background: rgba(179, 51, 51, 0.1);
+  color: #B33;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: transform 0.15s, background 0.15s;
+}
+.pw-archive-delete:active { transform: scale(0.96); }
 
 /* ---- Color picker swatches ---- */
 .pw-colors {
@@ -1342,6 +1497,21 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   border-radius: 12px;
   line-height: 1.5;
   margin: 4px 0 8px;
+}
+
+.pw-auth-switch {
+  text-align: center;
+  font-size: 14px;
+  color: var(--ink-60);
+  margin: 14px 0 0;
+}
+
+.pw-auth-switch button {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .pw-auth-hint {

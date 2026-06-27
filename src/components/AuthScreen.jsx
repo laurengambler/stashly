@@ -5,10 +5,36 @@
 
 import { useState } from 'react'
 import { useAuth } from '../lib/auth.jsx'
+import { track } from '../lib/posthog.js'
+
+// Supabase deliberately returns one generic "Invalid login credentials"
+// error for both an unregistered email and a wrong password (this is
+// anti-enumeration behaviour), so we can't split no_account from
+// wrong_password here — they share the 'invalid_credentials' reason.
+// We still tag the cases we *can* tell apart so login_failed stays
+// segmentable in PostHog.
+const loginFailureReason = (error) => {
+  const code = error?.code
+  const msg = (error?.message || '').toLowerCase()
+  if (code === 'email_not_confirmed' || msg.includes('not confirmed')) {
+    return 'email_not_confirmed'
+  }
+  if (
+    error?.status === 429 ||
+    code === 'over_request_rate_limit' ||
+    msg.includes('rate limit')
+  ) {
+    return 'rate_limited'
+  }
+  if (code === 'invalid_credentials' || msg.includes('invalid login credentials')) {
+    return 'invalid_credentials'
+  }
+  return 'unknown'
+}
 
 export default function AuthScreen() {
   const { signIn, signUp } = useAuth()
-  const [mode, setMode] = useState('signin') // 'signin' | 'signup'
+  const [mode, setMode] = useState('signup') // 'signin' | 'signup'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -26,14 +52,22 @@ export default function AuthScreen() {
         const { data, error } = await signUp(email.trim(), password)
         if (error) {
           setError(error.message)
+          track('signup_failed', { error_message: error.message })
         } else if (data?.user && !data.session) {
           // Supabase requires email confirmation by default.
           setInfo('Check your email to confirm your account, then sign in.')
           setMode('signin')
+          track('signup_confirmation_sent', { user_id: data.user.id })
         }
       } else {
         const { error } = await signIn(email.trim(), password)
-        if (error) setError(error.message)
+        if (error) {
+          setError(error.message)
+          track('login_failed', {
+            error_message: error.message,
+            reason: loginFailureReason(error),
+          })
+        }
       }
     } finally {
       setBusy(false)
@@ -55,35 +89,6 @@ export default function AuthScreen() {
           <p className="pw-auth-tagline">
             Save every gift card in one premium, private wallet.
           </p>
-        </div>
-
-        <div className="pw-auth-tabs" role="tablist">
-          <button
-            role="tab"
-            aria-selected={mode === 'signin'}
-            className={'pw-auth-tab' + (mode === 'signin' ? ' active' : '')}
-            onClick={() => {
-              setMode('signin')
-              setError(null)
-              setInfo(null)
-            }}
-            type="button"
-          >
-            Sign in
-          </button>
-          <button
-            role="tab"
-            aria-selected={mode === 'signup'}
-            className={'pw-auth-tab' + (mode === 'signup' ? ' active' : '')}
-            onClick={() => {
-              setMode('signup')
-              setError(null)
-              setInfo(null)
-            }}
-            type="button"
-          >
-            Create account
-          </button>
         </div>
 
         <form className="pw-auth-form" onSubmit={submit}>
@@ -124,6 +129,38 @@ export default function AuthScreen() {
               ? 'Create account'
               : 'Sign in'}
           </button>
+
+          <p className="pw-auth-switch">
+            {mode === 'signup' ? (
+              <>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signin')
+                    setError(null)
+                    setInfo(null)
+                  }}
+                >
+                  Sign in
+                </button>
+              </>
+            ) : (
+              <>
+                New to Stashly?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signup')
+                    setError(null)
+                    setInfo(null)
+                  }}
+                >
+                  Create account
+                </button>
+              </>
+            )}
+          </p>
 
           <p className="pw-hint pw-auth-hint">
             By continuing you agree to keep your gift card data in your private

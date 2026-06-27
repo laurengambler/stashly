@@ -28,7 +28,7 @@ export default function ConfirmModal({
         <div className="pw-modal-actions">
           <button
             type="button"
-            className={'pw-modal-btn ' + (destructive ? 'primary' : 'primary')}
+            className={'pw-modal-btn ' + (destructive ? 'destructive' : 'primary')}
             onClick={onConfirm}
           >
             {confirmLabel}

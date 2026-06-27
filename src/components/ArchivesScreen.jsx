@@ -10,7 +10,7 @@ import {
   cardBalanceDisplay,
 } from '../lib/helpers.js'
 
-function ArchivedCardRow({ card, onRestore, onOpen }) {
+function ArchivedCardRow({ card, onRestore, onOpen, onDelete }) {
   const theme = themeForCard(card)
   const balance = cardBalanceDisplay(card)
   return (
@@ -36,21 +36,36 @@ function ArchivedCardRow({ card, onRestore, onOpen }) {
           )}
         </div>
       </button>
-      <button
-        className="pw-archive-restore"
-        onClick={() => onRestore(card.id)}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 12a9 9 0 1 0 3-6.7" />
-          <path d="M3 4v5h5" />
-        </svg>
-        Restore
-      </button>
+      <div className="pw-archive-actions">
+        <button
+          className="pw-archive-restore"
+          onClick={() => onRestore(card.id)}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7" />
+            <path d="M3 4v5h5" />
+          </svg>
+          Restore
+        </button>
+        <button
+          className="pw-archive-delete"
+          onClick={() => onDelete(card.id)}
+          aria-label={'Delete ' + card.merchant}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18" />
+            <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+            <path d="M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6" />
+            <path d="M10 11v6M14 11v6" />
+          </svg>
+          Delete
+        </button>
+      </div>
     </div>
   )
 }
 
-export default function ArchivesScreen({ cards, onRestore, onOpen }) {
+export default function ArchivesScreen({ cards, onRestore, onOpen, onDelete }) {
   const subtitle =
     cards.length === 0
       ? 'Nothing archived yet'
@@ -89,6 +104,7 @@ export default function ArchivesScreen({ cards, onRestore, onOpen }) {
               card={card}
               onRestore={onRestore}
               onOpen={onOpen}
+              onDelete={onDelete}
             />
           ))
         )}

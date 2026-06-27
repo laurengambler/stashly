@@ -29,6 +29,7 @@ import {
   deletePhoto,
   newPhotoId,
 } from '../lib/photoStorage.js'
+import { track, safeBrand } from '../lib/posthog.js'
 
 function StarIcon({ filled, size = 22 }) {
   return (
@@ -105,6 +106,7 @@ function CardPhotos({ card, onUpdateCard }) {
       const oldId = card[field]
       onUpdateCard(card.id, { [field]: id })
       if (oldId) deletePhoto(oldId).catch(() => {})
+      track('photo_added', { side, brand: safeBrand(card) })
     } catch (err) {
       console.warn('Could not save photo', err)
       setError('Could not save photo. Please try again.')
@@ -122,6 +124,7 @@ function CardPhotos({ card, onUpdateCard }) {
     try {
       onUpdateCard(card.id, { [field]: null })
       deletePhoto(oldId).catch(() => {})
+      track('photo_removed', { side, brand: safeBrand(card) })
     } finally {
       setBusy(null)
     }
@@ -151,7 +154,7 @@ function CardPhotos({ card, onUpdateCard }) {
           previewUrl={urls.front}
           onFileSelected={(f) => handleFile('front', f)}
           onRemove={() => handleRemove('front')}
-          onPreviewClick={urls.front ? () => setViewing('front') : undefined}
+          onPreviewClick={urls.front ? () => { track('photo_viewed', { side: 'front', brand: safeBrand(card) }); setViewing('front') } : undefined}
           busy={busy === 'front'}
         />
         <PhotoInput
@@ -159,7 +162,7 @@ function CardPhotos({ card, onUpdateCard }) {
           previewUrl={urls.back}
           onFileSelected={(f) => handleFile('back', f)}
           onRemove={() => handleRemove('back')}
-          onPreviewClick={urls.back ? () => setViewing('back') : undefined}
+          onPreviewClick={urls.back ? () => { track('photo_viewed', { side: 'back', brand: safeBrand(card) }); setViewing('back') } : undefined}
           busy={busy === 'back'}
         />
         {error && <p className="pw-error">{error}</p>}
@@ -278,7 +281,10 @@ function PinRow({ pin }) {
     )
   }
   const toggle = () => {
-    setRevealed((r) => !r)
+    setRevealed((r) => {
+      if (!r) track('pin_revealed')
+      return !r
+    })
     haptic(15)
   }
   return (
@@ -299,6 +305,57 @@ function PinRow({ pin }) {
         </button>
       </div>
     </div>
+  )
+}
+
+// Copy the full card number to the clipboard with a brief "Copied"
+// confirmation. Falls back to a hidden textarea + execCommand for
+// browsers/webviews without the async clipboard API.
+function CopyNumberButton({ number }) {
+  const [copied, setCopied] = useState(false)
+  const timerRef = useRef(null)
+
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    },
+    []
+  )
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(number)
+    } catch {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = number
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {
+        // Nothing else we can do — leave copied=false.
+        return
+      }
+    }
+    setCopied(true)
+    haptic(10)
+    track('card_number_copied')
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <button
+      type="button"
+      className={'pw-copy-btn' + (copied ? ' copied' : '')}
+      onClick={handleCopy}
+      aria-label="Copy card number"
+    >
+      {copied ? 'Copied' : 'Copy'}
+    </button>
   )
 }
 
@@ -382,23 +439,27 @@ export default function CardDetailScreen({
   onArchive,
   onToggleFavorite,
   onRestore,
+  onEdit,
 }) {
   const balance = cardBalanceDisplay(card)
-  const hasBalance = computeBalance(card) !== null
+  const numericBalance = computeBalance(card)
+  const hasBalance = numericBalance !== null
   const openLoop = isOpenLoopCard(card)
   const [scanOpen, setScanOpen] = useState(false)
   const [focusDeduct, setFocusDeduct] = useState(0)
+  const [zeroHintDismissed, setZeroHintDismissed] = useState(false)
+
+  // Gentle, non-blocking nudge to archive a fully-spent card. Stays
+  // hidden once dismissed (for this viewing) or if the card is already
+  // archived.
+  const showZeroHint =
+    hasBalance && numericBalance === 0 && !card.archived && !zeroHintDismissed
 
   const currentColor = card.color || defaultColorForCard(card)
 
-  const handleDelete = () => {
-    if (confirm('Remove ' + card.merchant + ' from your wallet?')) {
-      onDelete(card.id)
-    }
-  }
-
   const handleUseCard = () => {
     setScanOpen(false)
+    track('card_scan_used', { brand: safeBrand(card) })
     if (hasBalance) {
       // Bumping the counter forces a re-focus even if user opens scan
       // twice in a row and clicks "Yes" both times.
@@ -452,6 +513,33 @@ export default function CardDetailScreen({
         </div>
       </div>
 
+      {showZeroHint && (
+        <div className="pw-zero-hint" role="status">
+          <div className="pw-zero-hint-text">
+            Balance is $0 — archive this card to keep your wallet tidy?
+          </div>
+          <div className="pw-zero-hint-actions">
+            <button
+              type="button"
+              className="pw-zero-hint-archive"
+              onClick={() => onArchive(card.id)}
+            >
+              Archive
+            </button>
+            <button
+              type="button"
+              className="pw-zero-hint-dismiss"
+              onClick={() => setZeroHintDismissed(true)}
+              aria-label="Dismiss"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {openLoop && (
         <div className="pw-notice">
           Limited visibility — for your security, Stashly only stores the last 4
@@ -478,8 +566,11 @@ export default function CardDetailScreen({
       <div className="pw-section">
         <div className="pw-row">
           <div className="pw-row-label">Card number</div>
-          <div className="pw-row-value">
-            {openLoop ? cardMaskedNumber(card) : formatNumber(card.number)}
+          <div className="pw-pin-row">
+            <div className="pw-row-value">
+              {openLoop ? cardMaskedNumber(card) : formatNumber(card.number)}
+            </div>
+            {!openLoop && card.number && <CopyNumberButton number={card.number} />}
           </div>
         </div>
         {!openLoop && <PinRow pin={card.pin} />}
@@ -490,7 +581,7 @@ export default function CardDetailScreen({
           <div className="pw-row-label">Card color</div>
           <ColorPicker
             value={currentColor}
-            onChange={(c) => onUpdateCard(card.id, { color: c })}
+            onChange={(c) => { onUpdateCard(card.id, { color: c }); track('card_color_changed', { brand: safeBrand(card) }) }}
           />
         </div>
       </div>
@@ -509,7 +600,10 @@ export default function CardDetailScreen({
       {!openLoop && (
         <button
           className="pw-barcode pw-barcode-cta"
-          onClick={() => setScanOpen(true)}
+          onClick={() => {
+            setScanOpen(true)
+            track('card_scanned', { brand: safeBrand(card) })
+          }}
         >
           <div className="pw-barcode-label">Tap to scan at register</div>
           <Barcode value={card.number} />
@@ -518,6 +612,12 @@ export default function CardDetailScreen({
       )}
 
       <div className="pw-detail-actions">
+        <button
+          className="pw-secondary-action"
+          onClick={() => onEdit(card.id)}
+        >
+          Edit card
+        </button>
         {card.archived ? (
           <button
             className="pw-secondary-action"
@@ -533,7 +633,7 @@ export default function CardDetailScreen({
             Archive card
           </button>
         )}
-        <button className="pw-delete" onClick={handleDelete}>
+        <button className="pw-delete" onClick={() => onDelete(card.id)}>
           Remove card
         </button>
       </div>
@@ -541,7 +641,7 @@ export default function CardDetailScreen({
       {scanOpen && (
         <FullscreenBarcode
           card={card}
-          onClose={() => setScanOpen(false)}
+          onClose={() => { track('barcode_scan_dismissed', { brand: safeBrand(card) }); setScanOpen(false) }}
           onUseCard={handleUseCard}
         />
       )}
