@@ -3,8 +3,19 @@
 // section, and the logout action. Profile data is read/written
 // through profileApi.js so this stays UI-only.
 
+import { useState } from 'react'
 import { useAuth } from '../lib/auth.jsx'
+import { friendlyAuthError } from '../lib/authErrors.js'
 import BirthdaySection from './BirthdaySection.jsx'
+
+// Which providers are linked to this account.
+const hasProvider = (user, name) => {
+  const list =
+    user?.app_metadata?.providers ||
+    (user?.identities || []).map((i) => i.provider) ||
+    []
+  return list.includes(name)
+}
 
 export default function ProfileScreen({
   profile,
@@ -13,7 +24,18 @@ export default function ProfileScreen({
   biometricLockEnabled,
   onToggleBiometricLock,
 }) {
-  const { user } = useAuth()
+  const { user, linkAppleIdentity } = useAuth()
+  const [linkBusy, setLinkBusy] = useState(false)
+  const [linkError, setLinkError] = useState(null)
+  const appleLinked = hasProvider(user, 'apple')
+
+  const connectApple = async () => {
+    setLinkBusy(true)
+    setLinkError(null)
+    const { error } = await linkAppleIdentity()
+    if (error) setLinkError(friendlyAuthError(error, 'signin'))
+    setLinkBusy(false)
+  }
 
   return (
     <div className="pw-screen active">
@@ -42,6 +64,27 @@ export default function ProfileScreen({
           profile={profile}
           onSave={onSaveProfile}
         />
+
+        {!appleLinked && (
+          <div className="pw-setting-row">
+            <div className="pw-setting-text">
+              <div className="pw-setting-title">Connect Apple</div>
+              <div className="pw-setting-sub">
+                Add one-tap Sign in with Apple. Linking keeps everything in
+                this account — no second account.
+              </div>
+              {linkError && <div className="pw-setting-error">{linkError}</div>}
+            </div>
+            <button
+              type="button"
+              className="pw-connect-btn"
+              onClick={connectApple}
+              disabled={linkBusy}
+            >
+              {linkBusy ? '…' : 'Connect'}
+            </button>
+          </div>
+        )}
 
         <div className="pw-setting-row">
           <div className="pw-setting-text">

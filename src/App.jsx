@@ -17,6 +17,7 @@ import ArchivesScreen from './components/ArchivesScreen.jsx'
 import ProfileScreen from './components/ProfileScreen.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import BiometricLock from './components/BiometricLock.jsx'
+import AppleLinkNudge from './components/AppleLinkNudge.jsx'
 import ConfirmModal from './components/ConfirmModal.jsx'
 import Toast from './components/Toast.jsx'
 import AuthScreen from './components/AuthScreen.jsx'
@@ -559,6 +560,7 @@ export default function App() {
             onArchive={requestArchive}
             onToggleFavorite={handleToggleFavorite}
           />
+          <AppleLinkNudge />
           {showBirthdayOnboarding && (
             <div className="pw-birthday-onboarding-wrap">
               <BirthdaySection

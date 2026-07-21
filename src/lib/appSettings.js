@@ -25,3 +25,7 @@ const write = (patch) => {
 // wallet on app open. Users can turn it off in settings.
 export const getBiometricLockEnabled = () => read().biometricLock !== false
 export const setBiometricLockEnabled = (on) => write({ biometricLock: !!on })
+
+// One-time "Connect Apple" nudge for existing email users (dismissible).
+export const getAppleNudgeDismissed = () => read().appleNudgeDismissed === true
+export const setAppleNudgeDismissed = (v) => write({ appleNudgeDismissed: !!v })

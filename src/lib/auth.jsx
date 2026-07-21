@@ -20,6 +20,10 @@ const SUPABASE_APPLE_REDIRECT =
   'https://djwmohvbyizryfxpmlzm.supabase.co/auth/v1/callback'
 // Bundle ID — the `aud` of the native Apple identity token.
 const APPLE_NATIVE_CLIENT_ID = 'com.getstashly.app'
+// Deep link Supabase redirects back to after the "Connect Apple" OAuth
+// link flow. Must be registered in Info.plist (CFBundleURLSchemes) AND in
+// Supabase → Authentication → URL Configuration → Redirect URLs.
+const APPLE_LINK_REDIRECT = 'com.getstashly.app://login-callback'
 
 // Apple wants the SHA-256 of a random nonce in the auth request; Supabase
 // gets the raw nonce and re-hashes it to verify the token — blocks replay.
@@ -81,6 +85,35 @@ export function AuthProvider({ children }) {
     return () => {
       cancelled = true
       sub.subscription.unsubscribe()
+    }
+  }, [])
+
+  // Complete the "Connect Apple" OAuth link when Supabase deep-links back
+  // into the app (com.getstashly.app://login-callback?code=...).
+  useEffect(() => {
+    let listener
+    ;(async () => {
+      try {
+        const { App: CapApp } = await import('@capacitor/app')
+        listener = await CapApp.addListener('appUrlOpen', async ({ url }) => {
+          if (!url || !url.includes('login-callback')) return
+          try {
+            const { error } = await supabase.auth.exchangeCodeForSession(url)
+            if (!error) track('apple_linked', {})
+          } catch {
+            /* non-fatal — user can retry from Settings */
+          }
+          try {
+            const { Browser } = await import('@capacitor/browser')
+            await Browser.close()
+          } catch {}
+        })
+      } catch {
+        /* @capacitor/app unavailable (web) — nothing to listen for */
+      }
+    })()
+    return () => {
+      listener?.remove?.()
     }
   }, [])
 
@@ -213,6 +246,32 @@ export function AuthProvider({ children }) {
     return { error }
   }
 
+  // Proactively link Apple to the CURRENTLY signed-in account (the
+  // duplicate-proof path: an existing email user attaches Apple before
+  // ever doing a standalone Apple sign-in). Uses Supabase's OAuth link
+  // flow in the system browser; the deep-link callback is completed by the
+  // appUrlOpen listener below.
+  // Requires: the Apple web OAuth secret in Supabase, and
+  // APPLE_LINK_REDIRECT registered in Supabase's redirect allow-list.
+  const linkAppleIdentity = async () => {
+    try {
+      const { data, error } = await supabase.auth.linkIdentity({
+        provider: 'apple',
+        options: { skipBrowserRedirect: true, redirectTo: APPLE_LINK_REDIRECT },
+      })
+      if (error) return { error }
+      if (Capacitor.isNativePlatform?.()) {
+        const { Browser } = await import('@capacitor/browser')
+        await Browser.open({ url: data.url })
+      } else if (data?.url) {
+        window.location.href = data.url
+      }
+      return { ok: true }
+    } catch (err) {
+      return { error: { code: 'apple_link_failed', message: err?.message || 'Could not connect Apple' } }
+    }
+  }
+
   const value = {
     session,
     user: session?.user ?? null,
@@ -222,6 +281,7 @@ export function AuthProvider({ children }) {
     signOut,
     resetPassword,
     signInWithApple,
+    linkAppleIdentity,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
