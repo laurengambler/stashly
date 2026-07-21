@@ -42,8 +42,7 @@ export default function ProfileScreen({ profile, onSaveProfile, onSignOut }) {
         </button>
 
         <p className="pw-privacy-note">
-          We never sell your data. Card numbers, PINs, and exact birthdays are
-          never sent to analytics.
+          Card numbers, PINs, and exact birthdays are never sent to analytics.
         </p>
       </div>
     </div>

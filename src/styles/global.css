@@ -1402,121 +1402,216 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 }
 
 /* ---- Auth screen ---- */
+/* ============================================================
+   Auth screens — Stashly brand
+   Cream #F5EFE3 · Deep Navy #19123D (--ink) · Stash Lime #B2F332 (--lime)
+   Fraunces (display headline) · Inter (body / fields)
+   ============================================================ */
 .pw-auth-screen {
+  --cream: #F5EFE3;
   min-height: 100vh;
   min-height: 100dvh;
-  background: var(--bone);
+  background: var(--cream);
+  color: var(--ink);
+  font-family: 'Inter Variable', system-ui, -apple-system, sans-serif;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: calc(env(safe-area-inset-top) + 24px) 20px
-    calc(env(safe-area-inset-bottom) + 24px);
+  padding: calc(env(safe-area-inset-top) + 28px) 22px
+    calc(env(safe-area-inset-bottom) + 28px);
 }
 
-.pw-auth-shell {
-  width: 100%;
-  max-width: 380px;
-}
+.pw-auth-shell { width: 100%; max-width: 372px; }
 
-.pw-auth-brand {
-  text-align: center;
-  margin-bottom: 28px;
-}
+.pw-auth-brand { text-align: center; margin-bottom: 26px; }
 
 .pw-auth-logo {
-  width: 64px;
-  height: 64px;
-  border-radius: 20px;
-  background: var(--mint);
-  color: var(--ink);
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: var(--ink);
+  color: var(--cream);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 
-.pw-auth-title {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  margin: 0 0 6px;
+.pw-auth-headline {
+  font-family: 'Fraunces Variable', Georgia, serif;
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
   color: var(--ink);
+  margin: 0 0 10px;
+}
+/* The single Stash Lime moment on the whole auth screen: a lime
+   highlighter under the italic flourish word. (Lime as *text* on cream
+   fails contrast; the highlight keeps the navy word legible and makes
+   lime the hero accent.) */
+.pw-auth-headline em {
+  font-style: italic;
+  font-weight: 500;
+  color: var(--ink);
+  background-image: linear-gradient(transparent 56%, var(--lime) 56%);
+  padding: 0 4px;
+  margin: 0 -2px;
+  border-radius: 3px;
 }
 
-.pw-auth-tagline {
-  font-size: 14px;
+.pw-auth-sub {
+  font-size: 15px;
   color: var(--ink-60);
   margin: 0;
   line-height: 1.5;
 }
 
-.pw-auth-tabs {
+/* Sign in with Apple. Apple's guidelines require black/white with the
+   mark — it can't be recolored. It's the prominent primary by position,
+   full width, and being the only solid dark button at the top. */
+.pw-apple-btn {
+  width: 100%;
+  height: 52px;
   display: flex;
-  background: var(--ink-08);
-  border-radius: 999px;
-  padding: 4px;
-  margin-bottom: 18px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: #000;
+  color: #fff;
+  border-radius: 14px;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: transform 0.12s, opacity 0.12s;
+}
+.pw-apple-btn:active { transform: scale(0.985); }
+.pw-apple-btn:disabled { opacity: 0.5; }
+.pw-apple-btn svg { margin-top: -2px; }
+
+.pw-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 2px;
+  color: var(--ink-40);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.pw-auth-divider::before,
+.pw-auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(25, 18, 61, 0.14);
 }
 
-.pw-auth-tab {
-  flex: 1;
-  padding: 10px 14px;
-  border-radius: 999px;
-  font-size: 14px;
+.pw-auth-form { display: flex; flex-direction: column; gap: 12px; }
+
+.pw-auth-field label {
+  display: block;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink-60);
-  transition: background 0.15s, color 0.15s;
+  margin-bottom: 6px;
 }
-
-.pw-auth-tab.active {
-  background: #fff;
+.pw-auth-field input {
+  width: 100%;
+  height: 50px;
+  padding: 0 15px;
+  background: #FBF8F2;
+  border: 1.5px solid rgba(25, 18, 61, 0.14);
+  border-radius: 13px;
+  font-size: 16px;
   color: var(--ink);
-  box-shadow: 0 1px 2px rgba(25, 18, 61, 0.06);
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
 }
-
-.pw-auth-form {
-  display: flex;
-  flex-direction: column;
+.pw-auth-field input::placeholder { color: var(--ink-40); }
+.pw-auth-field input:focus {
+  outline: none;
+  border-color: var(--ink);
+  background: #fff;
 }
 
 .pw-auth-cta {
-  margin-top: 4px;
   width: 100%;
+  height: 52px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-top: 2px;
+  transition: transform 0.12s, opacity 0.12s, filter 0.12s;
+}
+.pw-auth-cta:active { transform: scale(0.985); }
+.pw-auth-cta:disabled { opacity: 0.55; }
+
+/* Primary CTAs are Deep Navy — Apple stays black, lime lives only on the
+   headline flourish, so nothing competes with the Apple primary. */
+.pw-auth-cta-primary {
+  background: var(--ink);
+  color: var(--cream);
+}
+.pw-auth-cta-primary:active { filter: brightness(1.12); }
+
+.pw-auth-cta-secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1.5px solid rgba(25, 18, 61, 0.2);
 }
 
-.pw-auth-cta:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.pw-auth-textlink {
+  align-self: center;
+  color: var(--ink-60);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pw-auth-textlink:hover { color: var(--ink); }
+
+.pw-auth-error {
+  font-size: 13.5px;
+  color: #8A2A2A;
+  background: rgba(179, 51, 51, 0.08);
+  padding: 11px 14px;
+  border-radius: 12px;
+  line-height: 1.45;
+  margin: 0;
 }
 
 .pw-auth-info {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--ink);
   background: var(--mint);
-  padding: 10px 14px;
+  padding: 11px 14px;
   border-radius: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.pw-auth-reset-lead {
+  font-size: 14px;
+  color: var(--ink-60);
   line-height: 1.5;
-  margin: 4px 0 8px;
+  margin: 0 2px;
 }
 
 .pw-auth-switch {
   text-align: center;
   font-size: 14px;
   color: var(--ink-60);
-  margin: 14px 0 0;
+  margin: 6px 0 0;
 }
-
 .pw-auth-switch button {
   color: var(--ink);
   font-weight: 600;
   font-size: 14px;
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-
-.pw-auth-hint {
-  text-align: center;
-  padding: 14px 4px 0;
 }
 
 /* ---- Loading state ---- */

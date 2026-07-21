@@ -32,7 +32,7 @@ import {
   updateCard,
   deleteCard,
 } from './lib/cardsApi.js'
-import { fetchProfile, upsertProfile } from './lib/profileApi.js'
+import { fetchProfile, upsertProfile, ensureProfile } from './lib/profileApi.js'
 import { track, identifyUser, ageRange, safeBrand } from './lib/posthog.js'
 
 // Pull the most useful bits out of a Supabase/PostgrestError so we can
@@ -137,14 +137,43 @@ export default function App() {
       if (!cancelled) setCardsLoaded(true)
 
       let prof = null
+      let profileFetchOk = false
       try {
         prof = await fetchProfile(userId)
-        if (!cancelled) setProfile(prof)
+        profileFetchOk = true
       } catch (err) {
         // Profile errors are not user-visible — the birthday section
         // is optional polish, not a blocker. Logging is enough.
         console.warn('Failed to load profile from Supabase', err)
       }
+
+      // Completed-signup signal + identity. Only when the profile fetch
+      // succeeded and confirmed there is no row yet (a genuine first
+      // authenticated load) do we create the profile. The insert itself
+      // is the once-per-user ledger: ensureProfile.created is true only
+      // when THIS call inserted the row, so user_signed_up fires exactly
+      // once per real signup. identify() runs first so the event (and any
+      // anonymous pre-signup events) attach to the real auth uid.
+      if (!cancelled && profileFetchOk && prof === null) {
+        try {
+          const { row, created } = await ensureProfile(userId, user?.email)
+          if (row) prof = row
+          identifyUser(userId, { email: user?.email })
+          if (created) {
+            // method reflects how the account was created, read from the
+            // Supabase identity provider so it's correct for both paths
+            // ('apple' for Sign in with Apple, 'email' otherwise). Fires
+            // once per completed signup regardless of method.
+            const method =
+              user?.app_metadata?.provider === 'apple' ? 'apple' : 'email'
+            track('user_signed_up', { user_id: userId, method })
+          }
+        } catch (err) {
+          console.warn('Failed to create initial profile', err)
+        }
+      }
+
+      if (!cancelled) setProfile(prof)
       if (!cancelled) setProfileLoaded(true)
 
       identifyUser(userId, {
@@ -184,6 +213,24 @@ export default function App() {
         user_id: user.id,
         count: inserted.length,
       })
+      // Each migrated card is a real card creation (a row in `cards`), so
+      // it must emit exactly one card_added — previously only the summary
+      // local_cards_migrated event fired, which is why card_added
+      // under-counted the cards table. `source` distinguishes the path
+      // without changing the event name other dashboards depend on.
+      //
+      // IMPORTANT: source: 'migration' is for RECONCILIATION ONLY (so
+      // total card_added reconciles to the cards table). It is EXCLUDED
+      // from the north-star add-card activation funnel — activation counts
+      // only source === 'manual'. Do not include migration events in
+      // activation metrics.
+      inserted.forEach((c) => {
+        track('card_added', {
+          user_id: user.id,
+          brand: safeBrand(c),
+          source: 'migration',
+        })
+      })
       setMigration(null)
       showToast(
         inserted.length === 1
@@ -215,7 +262,14 @@ export default function App() {
       setCards((prev) => [saved, ...prev])
       setScreen('wallet')
       showToast('Card added')
-      track('card_added', { user_id: user.id, brand: safeBrand(saved) })
+      // source: 'manual' is THE activation event. The north-star
+      // add-card activation funnel counts ONLY card_added where
+      // source === 'manual'. Fires once, after the DB write succeeds.
+      track('card_added', {
+        user_id: user.id,
+        brand: safeBrand(saved),
+        source: 'manual',
+      })
       return saved
     } catch (err) {
       logSupabaseError('insertCard', err)
