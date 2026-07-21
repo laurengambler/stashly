@@ -24,6 +24,10 @@ export const friendlyAuthError = (error, context = 'signin') => {
     return 'Sign in with Apple is available in the Stashly app on your iPhone.'
   }
 
+  if (code === 'apple_failed' || code === 'apple_no_token') {
+    return "We couldn't finish Sign in with Apple. Please try again, or use email below."
+  }
+
   if (
     msg.includes('failed to fetch') ||
     msg.includes('network') ||

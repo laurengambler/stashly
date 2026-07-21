@@ -8,10 +8,39 @@
 // or signOut() is called.
 
 import { createContext, useContext, useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { supabase } from './supabase.js'
 import { identifyUser, resetUser, track } from './posthog.js'
 
 const AuthContext = createContext(null)
+
+// Supabase's Apple callback for this project (native id-token flow verifies
+// the audience against the Client IDs configured in the dashboard).
+const SUPABASE_APPLE_REDIRECT =
+  'https://djwmohvbyizryfxpmlzm.supabase.co/auth/v1/callback'
+// Bundle ID — the `aud` of the native Apple identity token.
+const APPLE_NATIVE_CLIENT_ID = 'com.getstashly.app'
+
+// Apple wants the SHA-256 of a random nonce in the auth request; Supabase
+// gets the raw nonce and re-hashes it to verify the token — blocks replay.
+async function sha256Hex(input) {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(input)
+  )
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+function randomNonce(len = 32) {
+  const chars =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const bytes = new Uint8Array(len)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes)
+    .map((b) => chars[b % chars.length])
+    .join('')
+}
 
 // Person properties we send to PostHog so users are segmentable.
 // Email always exists on the Supabase auth user; name is only present
@@ -98,13 +127,83 @@ export function AuthProvider({ children }) {
     return { error }
   }
 
-  // Sign in with Apple. Fully implemented against the native
-  // @capacitor-community/apple-sign-in plugin + supabase.signInWithIdToken
-  // in the next phase (needs the Apple Developer capability + Supabase
-  // provider config). Until then it degrades to a friendly message rather
-  // than a dead button.
+  // Sign in with Apple — native, one tap, no password, no confirmation
+  // email. Uses the @capacitor-community/apple-sign-in native sheet to get
+  // an identity token, then supabase.signInWithIdToken. On the web build
+  // (no native sheet) it degrades to a friendly message.
+  //
+  // Account linking: Supabase automatically links this Apple identity into
+  // an EXISTING account when Apple returns a verified email that matches
+  // (the common case — user didn't hide their email). Apple Private Relay
+  // returns a non-matching address, so those create a new account; the
+  // proactive "Connect Apple" link flow (needs the web OAuth secret) is the
+  // deterministic fix and is deferred until that secret is added.
   const signInWithApple = async () => {
-    return { error: { code: 'apple_unavailable', message: 'Apple sign-in not yet available on this platform' } }
+    if (!Capacitor.isNativePlatform?.()) {
+      return {
+        error: {
+          code: 'apple_unavailable',
+          message: 'Apple sign-in is only available in the Stashly app.',
+        },
+      }
+    }
+    try {
+      const { SignInWithApple } = await import(
+        '@capacitor-community/apple-sign-in'
+      )
+      const rawNonce = randomNonce()
+      const hashedNonce = await sha256Hex(rawNonce)
+
+      const result = await SignInWithApple.authorize({
+        clientId: APPLE_NATIVE_CLIENT_ID,
+        redirectURI: SUPABASE_APPLE_REDIRECT,
+        scopes: 'email name',
+        nonce: hashedNonce,
+      })
+
+      const idToken = result?.response?.identityToken
+      if (!idToken) {
+        return { error: { code: 'apple_no_token', message: 'No identity token from Apple' } }
+      }
+
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: idToken,
+        nonce: rawNonce,
+      })
+      if (error) return { data, error }
+
+      if (data?.user) {
+        // Apple only returns the name on the FIRST authorization — persist
+        // it so PostHog person props / greetings have it.
+        const name = [result?.response?.givenName, result?.response?.familyName]
+          .filter(Boolean)
+          .join(' ')
+          .trim()
+        if (name && !data.user.user_metadata?.name) {
+          try {
+            await supabase.auth.updateUser({ data: { name } })
+          } catch {
+            /* non-fatal */
+          }
+        }
+        // An Apple authentication IS a login (new or returning); the
+        // once-per-signup user_signed_up still fires from App on profile
+        // creation with method 'apple'.
+        track('user_logged_in', { user_id: data.user.id, method: 'apple' })
+      }
+      return { data, error: null }
+    } catch (err) {
+      const msg = (err?.message || '').toLowerCase()
+      if (
+        msg.includes('cancel') ||
+        err?.code === '1001' ||
+        err?.code === 'ASAuthorizationErrorCanceled'
+      ) {
+        return { error: { code: 'apple_canceled', message: 'cancelled' } }
+      }
+      return { error: { code: 'apple_failed', message: err?.message || 'Apple sign-in failed' } }
+    }
   }
 
   const signOut = async () => {

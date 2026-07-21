@@ -6,7 +6,13 @@
 import { useAuth } from '../lib/auth.jsx'
 import BirthdaySection from './BirthdaySection.jsx'
 
-export default function ProfileScreen({ profile, onSaveProfile, onSignOut }) {
+export default function ProfileScreen({
+  profile,
+  onSaveProfile,
+  onSignOut,
+  biometricLockEnabled,
+  onToggleBiometricLock,
+}) {
   const { user } = useAuth()
 
   return (
@@ -36,6 +42,25 @@ export default function ProfileScreen({ profile, onSaveProfile, onSignOut }) {
           profile={profile}
           onSave={onSaveProfile}
         />
+
+        <div className="pw-setting-row">
+          <div className="pw-setting-text">
+            <div className="pw-setting-title">Require Face ID</div>
+            <div className="pw-setting-sub">
+              Lock your wallet with Face ID or Touch ID when you open the app.
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!biometricLockEnabled}
+            aria-label="Require Face ID"
+            className={'pw-switch' + (biometricLockEnabled ? ' on' : '')}
+            onClick={() => onToggleBiometricLock(!biometricLockEnabled)}
+          >
+            <span className="pw-switch-knob" />
+          </button>
+        </div>
 
         <button className="pw-signout-btn" onClick={onSignOut} type="button">
           Sign out

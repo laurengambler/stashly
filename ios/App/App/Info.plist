@@ -24,6 +24,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Stashly uses Face ID to keep your gift cards private when you open the app.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Stashly uses your camera so you can take photos of your gift cards and loyalty cards.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

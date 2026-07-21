@@ -16,6 +16,7 @@ import CardDetailScreen from './components/CardDetailScreen.jsx'
 import ArchivesScreen from './components/ArchivesScreen.jsx'
 import ProfileScreen from './components/ProfileScreen.jsx'
 import BottomNav from './components/BottomNav.jsx'
+import BiometricLock from './components/BiometricLock.jsx'
 import ConfirmModal from './components/ConfirmModal.jsx'
 import Toast from './components/Toast.jsx'
 import AuthScreen from './components/AuthScreen.jsx'
@@ -33,6 +34,7 @@ import {
   deleteCard,
 } from './lib/cardsApi.js'
 import { fetchProfile, upsertProfile, ensureProfile } from './lib/profileApi.js'
+import { getBiometricLockEnabled, setBiometricLockEnabled } from './lib/appSettings.js'
 import { track, identifyUser, ageRange, safeBrand } from './lib/posthog.js'
 
 // Pull the most useful bits out of a Supabase/PostgrestError so we can
@@ -60,6 +62,9 @@ export default function App() {
   const { user, loading: authLoading, signOut } = useAuth()
 
   const [screen, setScreen] = useState('wallet')
+  const [biometricLockEnabled, setBiometricLockEnabledState] = useState(
+    getBiometricLockEnabled()
+  )
   const [cards, setCards] = useState([])
   const [cardsLoaded, setCardsLoaded] = useState(false)
   const [activeCardId, setActiveCardId] = useState(null)
@@ -474,6 +479,12 @@ export default function App() {
     await signOut()
   }
 
+  const handleToggleBiometricLock = (on) => {
+    setBiometricLockEnabled(on)
+    setBiometricLockEnabledState(on)
+    track('biometric_lock_toggled', { enabled: !!on })
+  }
+
   // --- Derived view state ----------------------------------------
 
   const activeCards = useMemo(() => {
@@ -537,6 +548,7 @@ export default function App() {
   }
 
   return (
+    <BiometricLock enabled={!!user && biometricLockEnabled}>
     <div className={'pw-app' + (showBottomNav ? ' has-bottomnav' : '')}>
       {screen === 'wallet' && (
         <>
@@ -574,6 +586,8 @@ export default function App() {
           profile={profile}
           onSaveProfile={handleSaveProfile}
           onSignOut={handleSignOut}
+          biometricLockEnabled={biometricLockEnabled}
+          onToggleBiometricLock={handleToggleBiometricLock}
         />
       )}
 
@@ -646,5 +660,6 @@ export default function App() {
 
       <Toast message={toast.message} visible={toast.visible} />
     </div>
+    </BiometricLock>
   )
 }

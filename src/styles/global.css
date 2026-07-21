@@ -1614,6 +1614,96 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   text-underline-offset: 2px;
 }
 
+/* ---- Biometric lock screen ---- */
+.pw-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: #F5EFE3;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  font-family: 'Inter Variable', system-ui, -apple-system, sans-serif;
+}
+.pw-lock-inner { text-align: center; max-width: 300px; }
+.pw-lock-logo {
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  background: var(--ink);
+  color: #F5EFE3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+.pw-lock-title {
+  font-family: 'Fraunces Variable', Georgia, serif;
+  font-weight: 600;
+  font-size: 24px;
+  margin: 0 0 8px;
+}
+.pw-lock-sub {
+  font-size: 14.5px;
+  color: var(--ink-60);
+  line-height: 1.5;
+  margin: 0 0 22px;
+}
+.pw-lock-btn {
+  width: 100%;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: #F5EFE3;
+  font-size: 16px;
+  font-weight: 700;
+  transition: transform 0.12s, opacity 0.12s;
+}
+.pw-lock-btn:active { transform: scale(0.985); }
+.pw-lock-btn:disabled { opacity: 0.55; }
+
+/* ---- Settings toggle (profile) ---- */
+.pw-setting-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.pw-setting-text { flex: 1; }
+.pw-setting-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+.pw-setting-sub {
+  font-size: 13px;
+  color: var(--ink-60);
+  line-height: 1.45;
+  margin-top: 3px;
+}
+.pw-switch {
+  flex-shrink: 0;
+  width: 50px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--ink-15);
+  padding: 3px;
+  transition: background 0.18s;
+}
+.pw-switch.on { background: var(--ink); }
+.pw-switch-knob {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #fff;
+  transform: translateX(0);
+  transition: transform 0.18s;
+  box-shadow: 0 1px 3px rgba(25, 18, 61, 0.25);
+}
+.pw-switch.on .pw-switch-knob { transform: translateX(20px); }
+
 /* ---- Loading state ---- */
 .pw-loading {
   min-height: 100vh;
