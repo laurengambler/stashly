@@ -13,8 +13,14 @@
 //
 //  Nothing leaves the device: all recognition is local Vision/VisionKit.
 //
-//  NOTE: this file must be a member of the "App" target in Xcode
-//  (it auto-registers with Capacitor via CAPBridgedPlugin once compiled).
+//  Concurrency: VisionKit's DataScannerViewController is @MainActor, so every
+//  touch of it happens on the main actor (Task { @MainActor } here, and the
+//  LiveScanCoordinator class is @MainActor). The Vision framework requests
+//  (VNImageRequestHandler etc.) are NOT main-actor and run on a background
+//  queue in analyze().
+//
+//  NOTE: this file must be a member of the "App" target in Xcode (it
+//  auto-registers with Capacitor via CAPBridgedPlugin once compiled).
 //
 
 import Foundation
@@ -33,15 +39,14 @@ public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "scanImage", returnType: CAPPluginReturnPromise)
     ]
 
-    // Held strongly while a live scan is on screen.
-    private var liveCoordinator: LiveScanCoordinator?
-
     @objc func isAvailable(_ call: CAPPluginCall) {
-        if #available(iOS 16.0, *) {
+        guard #available(iOS 16.0, *) else {
+            call.resolve(["available": false])
+            return
+        }
+        Task { @MainActor in
             let ok = DataScannerViewController.isSupported && DataScannerViewController.isAvailable
             call.resolve(["available": ok])
-        } else {
-            call.resolve(["available": false])
         }
     }
 
@@ -60,29 +65,28 @@ public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Live scan requires iOS 16")
             return
         }
-        DispatchQueue.main.async {
+        Task { @MainActor in
             guard DataScannerViewController.isSupported,
                   DataScannerViewController.isAvailable,
                   let presenter = self.bridge?.viewController else {
                 call.reject("Scanner unavailable")
                 return
             }
+            // The coordinator keeps itself alive while presented.
             let coordinator = LiveScanCoordinator(
                 onImage: { image in
-                    self.liveCoordinator = nil
                     self.analyze(image: image) { result in call.resolve(result) }
                 },
                 onCancel: {
-                    self.liveCoordinator = nil
                     call.reject("cancelled", "cancelled")
                 }
             )
-            self.liveCoordinator = coordinator
             coordinator.present(from: presenter)
         }
     }
 
     // MARK: - Shared Vision analysis (barcode + OCR + merchant + image)
+    // Nonisolated: Vision framework requests are not main-actor.
 
     private func analyze(image: UIImage, completion: @escaping ([String: Any]) -> Void) {
         guard let cg = image.cgImage else {
@@ -166,18 +170,22 @@ public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
 // MARK: - Live scanner (VisionKit DataScannerViewController)
 
 @available(iOS 16.0, *)
+@MainActor
 final class LiveScanCoordinator: NSObject, DataScannerViewControllerDelegate {
     private let onImage: (UIImage) -> Void
     private let onCancel: () -> Void
     private var scanner: DataScannerViewController?
     private var handled = false
+    private var selfRetain: LiveScanCoordinator?
 
     init(onImage: @escaping (UIImage) -> Void, onCancel: @escaping () -> Void) {
         self.onImage = onImage
         self.onCancel = onCancel
+        super.init()
     }
 
     func present(from presenter: UIViewController) {
+        selfRetain = self // stay alive while on screen
         let scanner = DataScannerViewController(
             recognizedDataTypes: [.barcode(), .text()],
             qualityLevel: .balanced,
@@ -246,7 +254,9 @@ final class LiveScanCoordinator: NSObject, DataScannerViewControllerDelegate {
         guard !handled else { return }
         handled = true
         scanner?.stopScanning()
-        scanner?.dismiss(animated: true) { self.onCancel() }
+        scanner?.dismiss(animated: true)
+        onCancel()
+        selfRetain = nil
     }
 
     private func capture() {
@@ -255,13 +265,13 @@ final class LiveScanCoordinator: NSObject, DataScannerViewControllerDelegate {
         Task { @MainActor in
             let image = try? await scanner.capturePhoto()
             scanner.stopScanning()
-            scanner.dismiss(animated: true) {
-                if let image = image {
-                    self.onImage(image)
-                } else {
-                    self.onCancel()
-                }
+            scanner.dismiss(animated: true)
+            if let image {
+                self.onImage(image)
+            } else {
+                self.onCancel()
             }
+            self.selfRetain = nil
         }
     }
 }
