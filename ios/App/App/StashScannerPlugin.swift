@@ -28,6 +28,7 @@ import Capacitor
 import Vision
 import VisionKit
 import UIKit
+import AVFoundation
 
 @objc(StashScannerPlugin)
 public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -38,6 +39,11 @@ public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "scanLive", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "scanImage", returnType: CAPPluginReturnPromise)
     ]
+
+    // Prints once at startup if the plugin registered with Capacitor.
+    override public func load() {
+        print("📇 StashScanner: plugin loaded ✅")
+    }
 
     @objc func isAvailable(_ call: CAPPluginCall) {
         guard #available(iOS 16.0, *) else {
@@ -61,17 +67,44 @@ public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func scanLive(_ call: CAPPluginCall) {
+        print("📇 StashScanner: scanLive() called")
         guard #available(iOS 16.0, *) else {
             call.reject("Live scan requires iOS 16")
             return
         }
         Task { @MainActor in
-            guard DataScannerViewController.isSupported,
-                  DataScannerViewController.isAvailable,
-                  let presenter = self.bridge?.viewController else {
+            guard DataScannerViewController.isSupported else {
+                print("📇 StashScanner: DataScanner NOT supported on this device")
+                call.reject("Scanner not supported on this device")
+                return
+            }
+
+            // Explicitly request camera permission FIRST — this is what
+            // triggers the iOS prompt (and adds the Camera row in Settings).
+            // DataScannerViewController.isAvailable stays false until this is
+            // granted, so we must not gate on it before asking.
+            let status = AVCaptureDevice.authorizationStatus(for: .video)
+            print("📇 StashScanner: camera auth status = \(status.rawValue) (0=notDetermined,1=restricted,2=denied,3=authorized)")
+            if status == .notDetermined {
+                let granted = await AVCaptureDevice.requestAccess(for: .video)
+                print("📇 StashScanner: camera permission granted = \(granted)")
+                if !granted { call.reject("Camera permission denied"); return }
+            } else if status == .denied || status == .restricted {
+                call.reject("Camera permission denied")
+                return
+            }
+
+            guard DataScannerViewController.isAvailable else {
+                print("📇 StashScanner: DataScanner not available even after permission")
                 call.reject("Scanner unavailable")
                 return
             }
+            guard let presenter = self.bridge?.viewController else {
+                call.reject("No presenter view controller")
+                return
+            }
+
+            print("📇 StashScanner: presenting live scanner")
             // The coordinator keeps itself alive while presented.
             let coordinator = LiveScanCoordinator(
                 onImage: { image in
