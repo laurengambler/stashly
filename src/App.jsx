@@ -12,6 +12,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import WalletScreen from './components/WalletScreen.jsx'
 import AddCardScreen from './components/AddCardScreen.jsx'
+import AddCardFlow from './components/AddCardFlow.jsx'
 import CardDetailScreen from './components/CardDetailScreen.jsx'
 import ArchivesScreen from './components/ArchivesScreen.jsx'
 import ProfileScreen from './components/ProfileScreen.jsx'
@@ -259,22 +260,28 @@ export default function App() {
 
   // --- Card mutations (optimistic, then persisted) ----------------
 
-  const handleAddCard = async (newCard) => {
+  // Every activation add (scan, photos, or manual entry) routes through
+  // here, so card_added ALWAYS carries source:'manual' (migration is the
+  // only path that uses source:'migration'). `meta` adds the capture
+  // method and batch position. Navigation is left to the caller (the
+  // capture flow) so batch adds don't bounce back to the wallet.
+  const handleAddCard = async (newCard, meta = {}) => {
     if (!user) {
       throw new Error('Not signed in')
     }
     try {
       const saved = await insertCard(newCard, user.id)
       setCards((prev) => [saved, ...prev])
-      setScreen('wallet')
       showToast('Card added')
-      // source: 'manual' is THE activation event. The north-star
-      // add-card activation funnel counts ONLY card_added where
-      // source === 'manual'. Fires once, after the DB write succeeds.
+      // source: 'manual' is THE activation event — the north-star funnel
+      // counts card_added where source === 'manual'. method segments HOW
+      // it was added; batch_position is 1 for single adds, 1..n in a batch.
       track('card_added', {
         user_id: user.id,
         brand: safeBrand(saved),
         source: 'manual',
+        method: meta.method || 'manual',
+        batch_position: meta.batchPosition || 1,
       })
       return saved
     } catch (err) {
@@ -555,7 +562,7 @@ export default function App() {
         <>
           <WalletScreen
             cards={activeCards}
-            onAdd={() => { setScreen('add'); track('card_add_started', { user_id: user?.id }) }}
+            onAdd={() => setScreen('add')}
             onOpen={handleOpenCard}
             onArchive={requestArchive}
             onToggleFavorite={handleToggleFavorite}
@@ -594,7 +601,7 @@ export default function App() {
       )}
 
       {screen === 'add' && (
-        <AddCardScreen
+        <AddCardFlow
           onCancel={() => setScreen('wallet')}
           onSave={handleAddCard}
         />

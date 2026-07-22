@@ -2084,3 +2084,116 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .pw-app.has-bottomnav .pw-toast {
   bottom: calc(env(safe-area-inset-bottom) + 76px + 16px);
 }
+
+/* ============================================================
+   Capture-first add-card flow (capture + confirm screens)
+   Cream/navy · Fraunces headline on capture · lime ONLY on Save
+   ============================================================ */
+.pw-capture, .pw-confirm { background: #F5EFE3; }
+
+.pw-capture-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 24px 24px calc(env(safe-area-inset-bottom) + 24px);
+  text-align: center;
+  gap: 12px;
+}
+.pw-capture-headline {
+  font-family: 'Fraunces Variable', Georgia, serif;
+  font-weight: 600;
+  font-size: 30px;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  margin: 0;
+}
+.pw-capture-headline em { font-style: italic; font-weight: 500; }
+.pw-capture-sub {
+  font-size: 15px;
+  color: var(--ink-60);
+  line-height: 1.5;
+  margin: 0 auto 14px;
+  max-width: 300px;
+}
+.pw-capture-primary {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; height: 56px;
+  background: var(--ink); color: var(--bone);
+  border-radius: 16px; font-size: 17px; font-weight: 700;
+  box-shadow: 0 10px 26px rgba(25, 18, 61, 0.18);
+  transition: transform 0.12s;
+}
+.pw-capture-primary:active { transform: scale(0.98); }
+.pw-capture-secondary {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; height: 52px;
+  background: transparent; color: var(--ink);
+  border: 1.5px solid rgba(25, 18, 61, 0.2); border-radius: 16px;
+  font-size: 16px; font-weight: 600;
+  transition: transform 0.12s;
+}
+.pw-capture-secondary:active { transform: scale(0.98); }
+.pw-capture-done {
+  margin-top: 8px; width: 100%; height: 48px;
+  background: var(--mint); color: var(--ink);
+  border-radius: 14px; font-size: 15px; font-weight: 600;
+}
+.pw-capture-manual {
+  margin-top: 6px; color: var(--ink-60); font-size: 14px;
+  text-decoration: underline; text-underline-offset: 2px; padding: 8px;
+}
+
+.pw-confirm-body {
+  flex: 1; overflow-y: auto;
+  padding: 12px 20px 20px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.pw-confirm-photo {
+  width: 100%; height: 180px; border-radius: 16px; overflow: hidden;
+  background: #EDE6DA; display: flex; align-items: center; justify-content: center;
+}
+.pw-confirm-photo img { width: 100%; height: 100%; object-fit: cover; }
+.pw-confirm-photo-empty { color: var(--ink-40); }
+.pw-confirm-field label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--ink-60); margin-bottom: 6px;
+}
+.pw-confirm-field input {
+  width: 100%; height: 50px; padding: 0 15px;
+  background: #fff; border: 1.5px solid rgba(25, 18, 61, 0.14); border-radius: 13px;
+  font-size: 16px; color: var(--ink); font-family: inherit;
+}
+.pw-confirm-field input:focus { outline: none; border-color: var(--ink); }
+.pw-confirm-notice { margin: 0; }
+.pw-confirm-chip {
+  align-self: flex-start;
+  background: var(--ink-08); color: var(--ink);
+  font-size: 14px; font-weight: 600;
+  padding: 10px 16px; border-radius: 999px;
+}
+.pw-confirm-footer {
+  padding: 12px 20px calc(env(safe-area-inset-bottom) + 12px);
+  border-top: 0.5px solid var(--ink-15);
+  display: flex; flex-direction: column; gap: 8px;
+  background: #F5EFE3;
+}
+.pw-confirm-save {
+  width: 100%; height: 54px; border-radius: 14px;
+  background: var(--lime); color: var(--ink);
+  font-size: 17px; font-weight: 700;
+  box-shadow: 0 8px 20px rgba(178, 243, 50, 0.35);
+  transition: transform 0.12s, filter 0.12s;
+}
+.pw-confirm-save:active { filter: brightness(0.97); }
+.pw-confirm-save:disabled { opacity: 0.5; box-shadow: none; }
+.pw-confirm-again {
+  width: 100%; height: 48px; border-radius: 14px;
+  background: transparent; color: var(--ink);
+  border: 1.5px solid rgba(25, 18, 61, 0.2);
+  font-size: 15px; font-weight: 600;
+}
+.pw-confirm-again:disabled { opacity: 0.5; }
+
+/* Optional-field label (brand: Inter, muted blue) */
+.pw-optional { color: #6787AF; font-weight: 500; }
