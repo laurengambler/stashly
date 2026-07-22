@@ -24,12 +24,25 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Stashly uses Face ID to keep your gift cards private when you open the app.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Stashly uses your camera so you can take photos of your gift cards and loyalty cards.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Stashly accesses your photo library so you can attach existing photos of your cards.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Stashly saves card photos to your photo library when you choose to export them.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.getstashly.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.getstashly.app</string>
+			</array>
+		</dict>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

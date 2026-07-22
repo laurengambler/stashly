@@ -6,3 +6,6 @@ dist
 .env
 .env.*.local
 .env.local
+
+# Xcode SPM lockfile — regenerated on build; do not commit (goes stale after cap sync)
+ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved

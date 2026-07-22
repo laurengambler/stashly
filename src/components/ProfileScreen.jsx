@@ -3,11 +3,39 @@
 // section, and the logout action. Profile data is read/written
 // through profileApi.js so this stays UI-only.
 
+import { useState } from 'react'
 import { useAuth } from '../lib/auth.jsx'
+import { friendlyAuthError } from '../lib/authErrors.js'
 import BirthdaySection from './BirthdaySection.jsx'
 
-export default function ProfileScreen({ profile, onSaveProfile, onSignOut }) {
-  const { user } = useAuth()
+// Which providers are linked to this account.
+const hasProvider = (user, name) => {
+  const list =
+    user?.app_metadata?.providers ||
+    (user?.identities || []).map((i) => i.provider) ||
+    []
+  return list.includes(name)
+}
+
+export default function ProfileScreen({
+  profile,
+  onSaveProfile,
+  onSignOut,
+  biometricLockEnabled,
+  onToggleBiometricLock,
+}) {
+  const { user, linkAppleIdentity } = useAuth()
+  const [linkBusy, setLinkBusy] = useState(false)
+  const [linkError, setLinkError] = useState(null)
+  const appleLinked = hasProvider(user, 'apple')
+
+  const connectApple = async () => {
+    setLinkBusy(true)
+    setLinkError(null)
+    const { error } = await linkAppleIdentity()
+    if (error) setLinkError(friendlyAuthError(error, 'signin'))
+    setLinkBusy(false)
+  }
 
   return (
     <div className="pw-screen active">
@@ -37,13 +65,52 @@ export default function ProfileScreen({ profile, onSaveProfile, onSignOut }) {
           onSave={onSaveProfile}
         />
 
+        {!appleLinked && (
+          <div className="pw-setting-row">
+            <div className="pw-setting-text">
+              <div className="pw-setting-title">Connect Apple</div>
+              <div className="pw-setting-sub">
+                Add one-tap Sign in with Apple. Linking keeps everything in
+                this account — no second account.
+              </div>
+              {linkError && <div className="pw-setting-error">{linkError}</div>}
+            </div>
+            <button
+              type="button"
+              className="pw-connect-btn"
+              onClick={connectApple}
+              disabled={linkBusy}
+            >
+              {linkBusy ? '…' : 'Connect'}
+            </button>
+          </div>
+        )}
+
+        <div className="pw-setting-row">
+          <div className="pw-setting-text">
+            <div className="pw-setting-title">Require Face ID</div>
+            <div className="pw-setting-sub">
+              Lock your wallet with Face ID or Touch ID when you open the app.
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!biometricLockEnabled}
+            aria-label="Require Face ID"
+            className={'pw-switch' + (biometricLockEnabled ? ' on' : '')}
+            onClick={() => onToggleBiometricLock(!biometricLockEnabled)}
+          >
+            <span className="pw-switch-knob" />
+          </button>
+        </div>
+
         <button className="pw-signout-btn" onClick={onSignOut} type="button">
           Sign out
         </button>
 
         <p className="pw-privacy-note">
-          We never sell your data. Card numbers, PINs, and exact birthdays are
-          never sent to analytics.
+          Card numbers, PINs, and exact birthdays are never sent to analytics.
         </p>
       </div>
     </div>

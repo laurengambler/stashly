@@ -63,6 +63,40 @@ export const fetchProfile = async (userId) => {
   return rowToProfile(data)
 }
 
+// Create the profile row for `userId` only if it does not already exist.
+// Returns { row, created } where `created` is true ONLY when this call
+// actually inserted the row — that flag is the "completed signup" signal
+// App uses to fire user_signed_up exactly once per user. Uses
+// ignoreDuplicates so a concurrent/second call is a harmless no-op and
+// never clobbers an existing row's birthday data.
+export const ensureProfile = async (userId, userEmail) => {
+  if (!userId) throw new Error('ensureProfile: userId is required')
+
+  const payload = {
+    id: userId,
+    email: userEmail || null,
+    birthday_reminders_enabled: true,
+    // Onboarding is NOT dismissed here, so the birthday prompt still
+    // shows for the new user — this changes measurement, not UX.
+    birthday_prompt_dismissed: false,
+    onboarding_completed: false,
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert(payload, { onConflict: 'id', ignoreDuplicates: true })
+    .select()
+    .maybeSingle()
+
+  if (error) {
+    logErr('ensureProfile', error, { payload })
+    throw error
+  }
+  // With ignoreDuplicates, `data` is the newly-inserted row, or null when
+  // the row already existed (nothing inserted).
+  return { row: data ? rowToProfile(data) : null, created: !!data }
+}
+
 // Insert-or-update the profile row for `userId`. Always sends every
 // column the schema cares about so the row stays whole on first
 // insert. `userEmail` is captured here (not from the row) because
