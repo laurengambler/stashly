@@ -21,9 +21,12 @@ import {
 import { savePhoto, newPhotoId } from '../lib/photoStorage.js'
 import { track } from '../lib/posthog.js'
 
+// Group-space pure-digit numbers for readability, but leave alphanumeric
+// codes (some gift-card barcodes) exactly as scanned.
 const formatCardNumber = (value) => {
-  const digits = (value || '').replace(/\D/g, '')
-  return digits.replace(/(.{4})(?=.)/g, '$1 ')
+  const v = value || ''
+  if (/[^\d\s]/.test(v)) return v
+  return v.replace(/\D/g, '').replace(/(.{4})(?=.)/g, '$1 ')
 }
 
 const b64ToBlob = async (b64, type = 'image/jpeg') => {
