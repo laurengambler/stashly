@@ -12,8 +12,78 @@ import {
   segmentLine,
   detectPin,
   parseCardFields,
+  validatedNumber,
 } from '../src/lib/scanParse.js'
 import { matchMerchant, normalizeMerchantName } from '../src/lib/merchants.js'
+
+// ---------------------------------------------------------------------
+// THE GUARD. The card number field only ever receives a single validated
+// alphanumeric run — never raw recognized line text.
+//
+// Regression from device testing: the field came back holding
+// "ACCT#: 70123456 789 0123456", the raw transcript of a tapped highlight.
+// The tap override is gone, but the guard is what makes that class of bug
+// impossible rather than merely fixed.
+// ---------------------------------------------------------------------
+
+test('raw recognized line text can never be a card number', () => {
+  const rejected = [
+    'ACCT#: 70123456 789 0123456',          // the reported value
+    'Card #1234567890        18934',         // number + PIN, unsegmented
+    '6011 5000 1234 5678',                   // grouped, spaces intact
+    'This card is not redeemable for cash',  // fine print
+    'For balance visit example.com/balance',
+    'ACCT#:70123456',                        // punctuation anywhere at all
+    '',
+  ]
+  for (const r of rejected) {
+    assert.equal(validatedNumber(r), '', `must reject ${JSON.stringify(r)}`)
+  }
+})
+
+test('a single alphanumeric run passes', () => {
+  assert.equal(validatedNumber('701234567890123456'), '701234567890123456')
+  assert.equal(validatedNumber('1234567890'), '1234567890')
+  assert.equal(validatedNumber('AB123456789012'), 'AB123456789012')
+  assert.equal(validatedNumber('  1234567890  '), '1234567890', 'outer space trimmed')
+})
+
+test('a run that is not really a number is rejected', () => {
+  assert.equal(validatedNumber('STARBUCKS'), '', 'letters only')
+  assert.equal(validatedNumber('12345'), '', 'too short')
+  assert.equal(validatedNumber('1'.repeat(33)), '', 'too long')
+  assert.equal(validatedNumber('ABCDEFGH1234'), '', 'not mostly digits')
+})
+
+test('the guard fires on the reported card, end to end', () => {
+  // Vision returns this whole line as ONE fragment, so the parser has to
+  // strip the label itself. What it must never do is pass the line through.
+  const { number, pin, numberFromLabel } = parseCardFields([
+    'ACCT#: 70123456 789 0123456',
+  ])
+  assert.equal(number, '701234567890123456')
+  assert.equal(numberFromLabel, true)
+  assert.equal(pin, '')
+  assert.ok(!number.includes('ACCT'), 'no label')
+  assert.ok(!/\s/.test(number), 'no whitespace')
+})
+
+test('fine print alone leaves the number blank, not guessed', () => {
+  const { number, rejectedNumber } = parseCardFields([
+    'This card is not redeemable for cash except where required by law.',
+    'For balance visit example.com/balance',
+  ])
+  assert.equal(number, '')
+  assert.equal(rejectedNumber, '', 'nothing was even a candidate')
+})
+
+test('a rejected candidate is reported, not silently dropped', () => {
+  // A phone number in fine print is a single run but too short to be a
+  // card number; the parser records what it threw away for the debug log.
+  const { number, rejectedNumber } = parseCardFields(['Call 18005550199'])
+  assert.equal(number, '18005550199', '11 digits is a plausible card number')
+  assert.equal(rejectedNumber, '')
+})
 
 // ---------------------------------------------------------------------
 // Regression: a card printing the number and PIN on one line.

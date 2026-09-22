@@ -29,7 +29,7 @@ import {
   CARD_COLORS,
 } from '../lib/helpers.js'
 import { matchMerchant, normalizeMerchantName } from '../lib/merchants.js'
-import { parseCardFields } from '../lib/scanParse.js'
+import { parseCardFields, validatedNumber } from '../lib/scanParse.js'
 import { savePhoto, newPhotoId } from '../lib/photoStorage.js'
 import { track } from '../lib/posthog.js'
 
@@ -80,7 +80,15 @@ export default function ConfirmCardScreen({
 
   // Verbatim. Whatever the scanner read (or the user types) is what shows
   // and what gets stored.
-  const [number, setNumber] = useState(scan?.number || parsed.number)
+  //
+  // validatedNumber is the guard: a SCANNED value only reaches this field
+  // as a single alphanumeric run, never as raw recognized line text. The
+  // native side already applies it, and it is applied again here because
+  // this is the field itself — nothing should be able to route around it.
+  // What the user types afterwards is theirs and is not filtered.
+  const [number, setNumber] = useState(
+    () => validatedNumber(scan?.number) || parsed.number
+  )
   const scannedPin = scan?.pin || parsed.pin
   const [pin, setPin] = useState(scannedPin)
   const [showPin, setShowPin] = useState(!!scannedPin)

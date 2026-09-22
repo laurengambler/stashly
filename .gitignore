@@ -9,3 +9,11 @@ dist
 
 # Xcode SPM lockfile — regenerated on build; do not commit (goes stale after cap sync)
 ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+# Xcode CLI build output (xcodebuild from the command line writes here)
+ios/App/CapApp-SPM/build/
+
+# scan-probe inputs and generated fixtures. NEVER commit a real card photo:
+# regenerate the synthetic ones with tools/scan-probe/make-fixtures.sh
+tools/scan-probe/fixtures/
+tools/scan-probe/cards/

@@ -42,6 +42,35 @@ const WIDE_GAP = /\t+|\s{2,}/
 
 const digitsOnly = (s) => (s || '').replace(/\D/g, '')
 
+/**
+ * THE GUARD. The only way a scanned value reaches the card-number field.
+ *
+ * A card number is a single alphanumeric run: no spaces, no punctuation, no
+ * label, no sentence. Anything else is rejected outright and the field stays
+ * blank — a blank field the user fills in beats a field holding a line of
+ * fine print they have to notice and clear.
+ *
+ * This exists because a value once reached that field as raw recognized
+ * line text ("ACCT#: 70123456 789 0123456"), and no amount of care in the
+ * parser prevents that on its own: it needs one checkpoint that every
+ * candidate passes through.
+ *
+ * Note this guards SCANNED values only. What the user types is theirs.
+ *
+ * Mirrors CardTextParser.validatedNumber in the Swift plugin.
+ */
+export const validatedNumber = (candidate) => {
+  const s = String(candidate || '').trim()
+  if (!s) return ''
+  // One run. This is what raw line text fails on.
+  if (!/^[A-Za-z0-9]+$/.test(s)) return ''
+  if (s.length < 6 || s.length > 32) return ''
+  // Mostly digits — a word that happens to be one run is not a number.
+  const d = digitsOnly(s).length
+  if (d < 6 || d * 2 < s.length) return ''
+  return s
+}
+
 // A plausible PIN: 3-10 alphanumerics, mostly digits. Longer runs are
 // card numbers.
 const isPlausiblePin = (raw) => {
@@ -194,7 +223,11 @@ export const parseCardFields = (textLines = [], barcode = '') => {
     }
   }
 
-  const number = barcode ? String(barcode) : numberSeg ? numberSeg.digits : ''
+  // A labeled segment is "ACCT#: 70123456" — the label travels with it, so
+  // take its digits, never its text. Then the guard has the final say.
+  const candidate = barcode ? String(barcode) : numberSeg ? numberSeg.digits : ''
+  const number = validatedNumber(candidate)
+  const rejectedNumber = !number && candidate ? candidate : ''
 
   let pin = pinLabeled
   if (!pin && numberSeg) {
@@ -214,5 +247,5 @@ export const parseCardFields = (textLines = [], barcode = '') => {
 
   if (pin && number && digitsOnly(pin) === digitsOnly(number)) pin = ''
 
-  return { number, pin, numberFromLabel }
+  return { number, pin, numberFromLabel, rejectedNumber }
 }
