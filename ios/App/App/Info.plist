@@ -22,6 +22,13 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Export-compliance declaration, so App Store Connect stops asking on
+	     every upload. Stashly uses only exempt encryption: HTTPS to Supabase
+	     and Apple's own Keychain and biometric APIs. It ships no cryptography
+	     of its own — no crypto libraries, no custom ciphers, and no ATS
+	     exceptions. Revisit this if that ever stops being true. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
