@@ -60,11 +60,19 @@ import UIKit
 import AVFoundation
 import CoreGraphics
 
-/// Temporary device-debug logging. Prints the grouped visual lines and the
-/// chosen fields so a device test shows exactly what the parser saw.
-/// Remove once the scan flow has settled.
+/// Device-debug logging for the scan pipeline: prints the grouped visual
+/// lines, their segments, the chosen fields, and any candidate the number
+/// guard rejected — so a device test shows exactly what the parser saw.
+///
+/// OFF for shipping builds. Flip to true and rebuild when diagnosing a
+/// misread on device; the console then carries everything needed to
+/// reproduce it, and tools/scan-probe can replay the same photo on a Mac.
+///
+/// Note what this prints when enabled: real card numbers and PINs, to the
+/// Xcode console. That is fine on your own device while debugging and is
+/// the other reason it stays off by default.
 enum ScanLog {
-    static var enabled = true
+    static var enabled = false
 
     static func line(_ s: String) {
         guard enabled else { return }
