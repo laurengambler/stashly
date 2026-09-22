@@ -71,6 +71,29 @@ export const validatedNumber = (candidate) => {
   return s
 }
 
+// Strip a leading card-number label from a segment, so "ACCT#:70123456"
+// does not carry "ACCT" into the value.
+const stripCardLabel = (text) => {
+  const m = CARD_LABEL.exec(text)
+  return m ? text.slice(m.index + m[0].length) : text
+}
+
+/**
+ * The number printed in a segment.
+ *
+ * Keeps LETTERS — plenty of gift cards end in one ("41230-8856-2274Q") and
+ * dropping it produces a number that will not redeem — and closes up the
+ * separators a card prints inside its number (dashes, spaces). Tokens
+ * carrying no digit at all are labels or words, and are dropped, so
+ * "Call 18005550199" yields the number and not "Call18005550199".
+ */
+const numberValue = (text) =>
+  stripCardLabel(String(text || ''))
+    .split(/\s+/)
+    .filter((t) => /\d/.test(t))
+    .map((t) => t.replace(/[^A-Za-z0-9]/g, ''))
+    .join('')
+
 // A plausible PIN: 3-10 alphanumerics, mostly digits. Longer runs are
 // card numbers.
 const isPlausiblePin = (raw) => {
@@ -163,9 +186,15 @@ export const detectPin = (textLines = [], excludeNumber = '') => {
  * StashScannerPlugin.swift.
  *
  * Precedence for the number:
- *   1. a barcode payload (exact, and keeps letters)
- *   2. a run the card labels "Card #" / "Card number"
+ *   1. a run the card LABELS "Card #" / "ACCT#" / "Card number"
+ *   2. a barcode payload
  *   3. the longest remaining digit run on the card
+ *
+ * The label outranks the barcode because a gift-card barcode routinely
+ * encodes something that is not the card number — a retail UPC plus an
+ * internal serial, for instance. That is the right thing to scan at a
+ * register and the wrong thing to show as the number, so the barcode is
+ * kept separately as barcodeValue rather than shown.
  *
  * Precedence for the PIN:
  *   1. a labeled PIN
@@ -207,7 +236,7 @@ export const parseCardFields = (textLines = [], barcode = '') => {
   // barcode wins as the value, but we still need to know WHERE on the card
   // the number sits to spot a trailing PIN beside it.
   let numberSeg = null
-  let numberFromLabel = false
+  let numberFromLabel = false // reassigned below once the label candidate is validated
 
   const labeledIndex = segs.findIndex(
     (s, i) => s.digits.length >= 6 && isCardLabeled(i)
@@ -223,11 +252,24 @@ export const parseCardFields = (textLines = [], barcode = '') => {
     }
   }
 
-  // A labeled segment is "ACCT#: 70123456" — the label travels with it, so
-  // take its digits, never its text. Then the guard has the final say.
-  const candidate = barcode ? String(barcode) : numberSeg ? numberSeg.digits : ''
+  // Precedence. A card that LABELS its number is telling us outright, and
+  // it outranks the barcode: a gift-card barcode routinely encodes
+  // something else entirely — a retail UPC plus an internal serial, say —
+  // which is the right thing to scan at a register and the wrong thing to
+  // show as the card number. The barcode is kept as barcodeValue so
+  // register scanning still works.
+  const labeledCandidate = numberSeg && numberFromLabel ? numberValue(numberSeg.text) : ''
+  const labeled = validatedNumber(labeledCandidate)
+
+  let candidate
+  if (labeled) candidate = labeled
+  else if (barcode) candidate = String(barcode)
+  else if (numberSeg) candidate = numberValue(numberSeg.text)
+  else candidate = ''
+
   const number = validatedNumber(candidate)
   const rejectedNumber = !number && candidate ? candidate : ''
+  numberFromLabel = !!labeled
 
   let pin = pinLabeled
   if (!pin && numberSeg) {

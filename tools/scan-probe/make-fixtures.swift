@@ -31,7 +31,25 @@ struct Line {
     }
 }
 
-func render(_ lines: [Line], to url: URL, width: Int = 1200, height: Int = 760) {
+/// Render a real Code 128 barcode, so a fixture can carry a payload that
+/// Vision actually decodes — which is the only way to test what happens when
+/// the barcode disagrees with the printed card number.
+func barcodeImage(_ payload: String, width: CGFloat, height: CGFloat) -> NSImage? {
+    guard let filter = CIFilter(name: "CICode128BarcodeGenerator") else { return nil }
+    filter.setValue(payload.data(using: .ascii), forKey: "inputMessage")
+    filter.setValue(0.0, forKey: "inputQuietSpace")
+    guard let out = filter.outputImage else { return nil }
+    let scaled = out.transformed(by: CGAffineTransform(
+        scaleX: width / out.extent.width,
+        y: height / out.extent.height
+    ))
+    let rep = NSCIImageRep(ciImage: scaled)
+    let img = NSImage(size: rep.size)
+    img.addRepresentation(rep)
+    return img
+}
+
+func render(_ lines: [Line], to url: URL, width: Int = 1200, height: Int = 760, barcode: String? = nil) {
     let image = NSImage(size: NSSize(width: width, height: height))
     image.lockFocus()
 
@@ -54,6 +72,12 @@ func render(_ lines: [Line], to url: URL, width: Int = 1200, height: Int = 760) 
         ]
         (line.text as NSString).draw(at: NSPoint(x: 60, y: y), withAttributes: attrs)
         y -= line.size * 1.9
+    }
+
+    if let payload = barcode,
+       let bc = barcodeImage(payload, width: CGFloat(width) * 0.55, height: 120) {
+        bc.draw(in: NSRect(x: CGFloat(width) * 0.08, y: y - 40, width: CGFloat(width) * 0.55, height: 120))
+        y -= 190
     }
 
     image.unlockFocus()
@@ -102,3 +126,16 @@ render([
 
 render([Line("STASH MARKET", size: 40)] + fineprint,
        to: outDir.appendingPathComponent("fineprint-only.png"))
+
+// A cinema-style card whose BARCODE IS NOT ITS CARD NUMBER: the barcode
+// carries a retail UPC plus an internal serial, while the card prints and
+// labels the real number, which ends in a letter. The labeled number must
+// win, the letter must survive, and the dashes must close up.
+render([
+    Line("STASH CINEMA", size: 40),
+    Line("CARD#: 41230-8856-2274Q        PIN: 4412238", size: 30, bold: true),
+    Line("0125        2048576        0-12345-67890", size: 24),
+] + fineprint,
+       to: outDir.appendingPathComponent("barcode-vs-label.png"),
+       height: 900,
+       barcode: "012345678905000000411223")

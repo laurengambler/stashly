@@ -195,6 +195,14 @@ export default function ConfirmCardScreen({
         // is trimmed. Any internal spacing is the card's own.
         number: number.trim(),
         pin: pin.trim(),
+        // The scanned barcode is stored in its own right, because it is not
+        // always the card number: a gift-card barcode often carries a retail
+        // UPC plus an internal serial. cardsApi falls back to the number when
+        // this is absent, which was fine only while the two were the same
+        // value — now that a labeled number outranks the barcode, the
+        // register needs the payload that was actually on the card.
+        barcodeValue: scan?.barcode || '',
+        barcodeFormat: scan?.barcodeFormat || '',
         balance: startingBalance,
         startingBalance,
         transactions: [],

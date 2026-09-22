@@ -161,6 +161,33 @@ enum CardTextParser {
         return rx.firstMatch(in: s, options: [], range: NSRange(location: 0, length: (s as NSString).length)) != nil
     }
 
+    /// Strip a leading card-number label, so "ACCT#:70123456" does not carry
+    /// "ACCT" into the value.
+    private static func stripCardLabel(_ text: String) -> String {
+        guard let rx = cardLabel else { return text }
+        let ns = text as NSString
+        guard let m = rx.firstMatch(in: text, options: [], range: NSRange(location: 0, length: ns.length))
+        else { return text }
+        let start = m.range.location + m.range.length
+        guard start < ns.length else { return "" }
+        return ns.substring(from: start)
+    }
+
+    /// The number printed in a segment.
+    ///
+    /// Keeps LETTERS — plenty of gift cards end in one ("41230-8856-2274Q")
+    /// and dropping it produces a number that will not redeem — and closes up
+    /// the separators a card prints inside its number (dashes, spaces).
+    /// Tokens carrying no digit at all are labels or words and are dropped,
+    /// so "Call 18005550199" yields the number, not "Call18005550199".
+    static func numberValue(_ text: String) -> String {
+        stripCardLabel(text)
+            .split(whereSeparator: { $0.isWhitespace })
+            .filter { $0.contains(where: \.isNumber) }
+            .map { String($0.filter { $0.isLetter || $0.isNumber }) }
+            .joined()
+    }
+
     // MARK: - PIN
 
     /// 3-10 alphanumerics, mostly digits. Longer runs are card numbers.
@@ -326,19 +353,29 @@ enum CardTextParser {
         }
 
         var out = ParsedFields()
-        out.numberFromLabel = fromLabel
 
-        // A labeled segment is "ACCT#: 70123456" — the label travels with it,
-        // so take its digits, never its text.
+        // Precedence. A card that LABELS its number is telling us outright,
+        // and it outranks the barcode: a gift-card barcode routinely encodes
+        // something else entirely — a retail UPC plus an internal serial, say
+        // — which is the right thing to scan at a register and the wrong
+        // thing to show as the card number. The barcode is kept separately as
+        // barcodeValue so register scanning still works.
+        let labeled = (fromLabel && numberSeg != nil)
+            ? validatedNumber(numberValue(numberSeg!.text))
+            : ""
+
         let candidate: String
-        if let b = barcode, !b.isEmpty {
+        if !labeled.isEmpty {
+            candidate = labeled
+        } else if let b = barcode, !b.isEmpty {
             candidate = b
         } else if let seg = numberSeg {
-            candidate = seg.digits
+            candidate = numberValue(seg.text)
         } else {
             candidate = ""
         }
 
+        out.numberFromLabel = !labeled.isEmpty
         out.number = validatedNumber(candidate)
         if out.number.isEmpty && !candidate.isEmpty { out.rejectedNumber = candidate }
 

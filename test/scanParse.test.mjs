@@ -184,9 +184,53 @@ test('a labeled PIN beats the trailing-run guess', () => {
 // Barcode precedence.
 // ---------------------------------------------------------------------
 
-test('a barcode payload is the number, and keeps letters', () => {
-  const { number } = parseCardFields(['Card #1234567890   18934'], 'AB123456789012')
+test('the barcode is the number when nothing is labeled, and keeps letters', () => {
+  const { number } = parseCardFields(['1234567890'], 'AB123456789012')
   assert.equal(number, 'AB123456789012')
+})
+
+// ---------------------------------------------------------------------
+// Regression: a cinema gift card whose barcode is NOT its card number.
+//
+// Reported from device testing. The card is laid out:
+//
+//     CARD#: 41230-8856-2274Q          PIN: 4412238
+//     0125        2048576        0-12345-67890
+//
+// and its barcode encodes the retail UPC plus an internal serial, not the
+// card number. The number field filled with that payload. A barcode like
+// this is the right thing to scan at a register and the wrong thing to
+// show as the card number, so a LABELED number outranks it.
+//
+// Every digit here is synthetic — no real card data in this repo.
+// ---------------------------------------------------------------------
+
+test('a labeled card number beats the barcode payload', () => {
+  const { number, numberFromLabel, pin } = parseCardFields(
+    ['CARD#: 41230-8856-2274Q   PIN: 4412238'],
+    '012345678905000000411223' // UPC + serial, not the card number
+  )
+  assert.equal(number, '4123088562274Q', 'the printed, labeled number')
+  assert.equal(numberFromLabel, true)
+  assert.equal(pin, '4412238')
+})
+
+test('an alphanumeric card number keeps its letter and loses its dashes', () => {
+  // Dropping the trailing letter yields a number that will not redeem.
+  const { number } = parseCardFields(['CARD#: 41230-8856-2274Q'])
+  assert.equal(number, '4123088562274Q')
+  assert.ok(number.endsWith('Q'), 'letter preserved')
+  assert.ok(!number.includes('-'), 'separators closed up')
+})
+
+test('a label glued to its number does not leak into the value', () => {
+  assert.equal(parseCardFields(['ACCT#:70123456789']).number, '70123456789')
+  assert.equal(parseCardFields(['CARD#41230885622740']).number, '41230885622740')
+})
+
+test('a word next to a number is dropped, not glued to it', () => {
+  assert.equal(parseCardFields(['Call 18005550199']).number, '18005550199')
+  assert.equal(parseCardFields(['STASH MARKET 12345678']).number, '12345678')
 })
 
 test('a barcode does not hide a trailing PIN', () => {
