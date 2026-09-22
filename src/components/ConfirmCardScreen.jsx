@@ -28,7 +28,7 @@ import {
   CARD_BRAND,
   CARD_COLORS,
 } from '../lib/helpers.js'
-import { matchMerchant } from '../lib/merchants.js'
+import { matchMerchant, normalizeMerchantName } from '../lib/merchants.js'
 import { detectPin } from '../lib/scanParse.js'
 import { savePhoto, newPhotoId } from '../lib/photoStorage.js'
 import { track } from '../lib/posthog.js'
@@ -46,9 +46,27 @@ export default function ConfirmCardScreen({
 }) {
   // Merchant autofill is gated on the known-merchant list. No match means
   // an empty field on purpose — we do not guess from fine print.
-  const [merchant, setMerchant] = useState(
-    () => matchMerchant(scan?.textLines, scan?.merchantGuess)?.name || ''
+  const scanMatch = useMemo(
+    () => matchMerchant(scan?.textLines, scan?.merchantGuess),
+    [scan]
   )
+  const [merchant, setMerchant] = useState(scanMatch?.name || '')
+  const merchantRef = useRef(null)
+
+  // Merchant is the one field that gates Save, and gating it on the known
+  // list means it now arrives blank more often than it used to. Put the
+  // cursor in it so the user is one keystroke from being able to save
+  // rather than having to find the field first.
+  //
+  // Caveat: focusing programmatically does not reliably raise the iOS
+  // keyboard without a user gesture, so this places the caret and may or
+  // may not open the keyboard. The short delay lets the screen transition
+  // settle first — focusing mid-transition gets dropped.
+  useEffect(() => {
+    if (scanMatch) return
+    const t = setTimeout(() => merchantRef.current?.focus(), 350)
+    return () => clearTimeout(t)
+  }, [scanMatch])
 
   // Verbatim. Whatever the scanner read (or the user types) is what shows
   // and what gets stored.
@@ -112,6 +130,28 @@ export default function ConfirmCardScreen({
     }
 
     const startingBalance = showBalance ? sanitizeCurrencyInput(balance) : null
+
+    // Merchant-list gap signal. Fires when the name the user settled on
+    // isn't on the known-merchant list — either we prefilled nothing and
+    // they typed it, or we prefilled a match and they replaced it with
+    // something else. Ranked by frequency, these are exactly the names
+    // worth adding to lib/merchants.js next.
+    //
+    // Deliberately measured at save, not on every keystroke, so it
+    // reflects what the user committed to. It is not an error event and
+    // has no bearing on the add-card funnel.
+    const typedMerchant = merchant.trim()
+    if (typedMerchant && !matchMerchant([typedMerchant])) {
+      track('merchant_unmatched', {
+        merchant: normalizeMerchantName(typedMerchant),
+        // Did the gated autofill put something there that they replaced?
+        replaced_match: scanMatch ? scanMatch.name : null,
+        // Distinguishes "the list is missing this merchant" from "the scan
+        // read no text at all", which is a capture problem, not a gap.
+        had_scan_text: (scan?.textLines || []).length > 0,
+        batch_position: batchPosition,
+      })
+    }
 
     let payload
     if (classification.isOpenLoop) {
@@ -192,6 +232,7 @@ export default function ConfirmCardScreen({
         <div className="pw-field pw-confirm-field">
           <label>Merchant</label>
           <input
+            ref={merchantRef}
             type="text"
             value={merchant}
             onChange={(e) => setMerchant(e.target.value)}

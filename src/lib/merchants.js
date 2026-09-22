@@ -147,12 +147,22 @@ const MERCHANTS = [
 // Fold a line of OCR text into a comparable form: lowercase, accents and
 // punctuation flattened to single spaces. "BATH & BODY WORKS®" and
 // "Bath and Body Works" both reduce to something the aliases can hit.
+//
+// Exported as normalizeMerchantName below: the merchant_unmatched event
+// reports the normalized name so "Dutchie's Coffee", "dutchies coffee"
+// and "DUTCHIES COFFEE" group into one row when we rank the gaps.
 const normalize = (s) =>
   (s || '')
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/&/g, ' and ')
+    // Apostrophes close up rather than splitting, so "Joe's" and "Joes"
+    // are one name. Without this the merchant_unmatched ranking splits
+    // every possessive brand across two rows, and possessives are most of
+    // this category. The "kohl s" style aliases below still earn their
+    // keep: OCR often reads the apostrophe as a space.
+    .replace(/['‘’ʼ]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
 
@@ -211,3 +221,12 @@ export const matchMerchant = (textLines = [], merchantGuess = '') => {
 
 // Exposed for tests / future "is this merchant known?" UI.
 export const knownMerchantNames = () => MERCHANTS.map((m) => m.name)
+
+/**
+ * Normalized form of a user-typed merchant name, for analytics.
+ *
+ * Length-capped: this is free text a user typed, and it is the only
+ * user-authored string this app sends to analytics. Capping keeps a
+ * stray paste out of the event stream.
+ */
+export const normalizeMerchantName = (s) => normalize(s).slice(0, 60)
