@@ -6,9 +6,16 @@
 // capture → confirm → save flow can be exercised without a device.
 //
 // Result shape (all fields optional; the flow degrades to empty fields):
-//   { merchantGuess, number, barcode, barcodeFormat, imageBase64, textLines }
+//   { merchantGuess, number, pin, barcode, barcodeFormat, imageBase64, textLines }
+//
+// `merchantGuess` is only ever a HINT. It is the largest non-numeric line
+// the scanner saw, which on the back of a card is usually fine print — so
+// nothing autofills the merchant field from it directly. It is fed through
+// matchMerchant() with the rest of the text and used only on a hit against
+// the known-merchant list.
 
 import { Capacitor, registerPlugin } from '@capacitor/core'
+import { matchMerchant } from './merchants.js'
 
 const StashScanner = registerPlugin('StashScanner')
 const isNative = () => !!Capacitor.isNativePlatform?.()
@@ -20,12 +27,18 @@ const mockResult = () => {
     return { ...window.__mockScan }
   }
   return {
-    merchantGuess: 'Starbucks',
+    merchantGuess: 'STARBUCKS',
     number: '6011500012345678',
+    pin: '',
     barcode: '6011500012345678',
     barcodeFormat: 'code128',
     imageBase64: null,
-    textLines: ['STARBUCKS', '6011 5000 1234 5678', 'Balance $25.00'],
+    textLines: [
+      'STARBUCKS',
+      '6011 5000 1234 5678',
+      'PIN 4821',
+      'Balance $25.00',
+    ],
   }
 }
 
@@ -54,5 +67,19 @@ export const scanImage = async (base64) => {
 }
 
 // Did the scan surface anything usable? Drives the capture_failed event.
-export const scanUsable = (r) =>
-  !!(r && ((r.number && r.number.trim()) || (r.merchantGuess && r.merchantGuess.trim())))
+//
+// "Usable" means the user is about to see a field already filled in. A raw
+// merchantGuess no longer counts — it only fills the merchant field if it
+// matches the known-merchant list, so that is what we test here. Keeping
+// the loose old test would have under-reported capture_failed exactly on
+// the back-of-card scans this release set out to fix.
+export const scanUsable = (r) => {
+  if (!r) return false
+  const has = (v) => !!(v && String(v).trim())
+  return (
+    has(r.number) ||
+    has(r.barcode) ||
+    has(r.pin) ||
+    !!matchMerchant(r.textLines, r.merchantGuess)
+  )
+}

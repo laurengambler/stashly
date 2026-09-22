@@ -2166,6 +2166,16 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 }
 .pw-confirm-field input:focus { outline: none; border-color: var(--ink); }
 .pw-confirm-notice { margin: 0; }
+/* The card number is never regrouped, so it is set in a monospaced face
+   with a little tracking: that is what makes a digit-by-digit comparison
+   against the physical card readable without inserting spaces. */
+.pw-confirm-verbatim input {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  letter-spacing: 0.06em;
+}
+.pw-field-hint {
+  margin: 6px 0 0; font-size: 12px; line-height: 1.35; color: var(--ink-60);
+}
 .pw-confirm-chip {
   align-self: flex-start;
   background: var(--ink-08); color: var(--ink);

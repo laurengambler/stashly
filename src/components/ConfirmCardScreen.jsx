@@ -1,9 +1,19 @@
 // components/ConfirmCardScreen.jsx
 // The single confirm screen after a scan / photo import. Everything the
-// user needs to save a findable, spendable card: the captured photo, an
-// auto-guessed merchant (tap to edit), the auto-filled number, and an
-// optional balance chip. Save is the one lime action. PIN / color / notes
-// are intentionally left for the card detail screen post-add.
+// user needs to save a findable, spendable card: the captured photo, the
+// merchant, the card number exactly as scanned, and optional balance /
+// PIN chips. Save is the one lime action.
+//
+// Three rules this screen exists to enforce:
+//
+//   1. The card number is shown and stored VERBATIM — no grouping, no
+//      re-spacing. The user checks it character-for-character against the
+//      card in their hand, and inserted spaces make that read wrong.
+//   2. The merchant is only prefilled when recognized text matches a
+//      known merchant (see lib/merchants.js). Cards get photographed
+//      back-side-up, and a fine-print prefill is worse than a blank field.
+//   3. The PIN is optional and collapsed. It only opens pre-filled when
+//      the card clearly labeled a PIN. It is never required to save.
 //
 // Open-loop (Visa/Mastercard) detection is preserved: if the number
 // classifies as a payment PAN we store the last-4 only and fire
@@ -18,16 +28,10 @@ import {
   CARD_BRAND,
   CARD_COLORS,
 } from '../lib/helpers.js'
+import { matchMerchant } from '../lib/merchants.js'
+import { detectPin } from '../lib/scanParse.js'
 import { savePhoto, newPhotoId } from '../lib/photoStorage.js'
 import { track } from '../lib/posthog.js'
-
-// Group-space pure-digit numbers for readability, but leave alphanumeric
-// codes (some gift-card barcodes) exactly as scanned.
-const formatCardNumber = (value) => {
-  const v = value || ''
-  if (/[^\d\s]/.test(v)) return v
-  return v.replace(/\D/g, '').replace(/(.{4})(?=.)/g, '$1 ')
-}
 
 const b64ToBlob = async (b64, type = 'image/jpeg') => {
   const res = await fetch(`data:${type};base64,${b64}`)
@@ -40,8 +44,25 @@ export default function ConfirmCardScreen({
   onSave,
   onBack,
 }) {
-  const [merchant, setMerchant] = useState(scan?.merchantGuess || '')
-  const [number, setNumber] = useState(formatCardNumber(scan?.number || ''))
+  // Merchant autofill is gated on the known-merchant list. No match means
+  // an empty field on purpose — we do not guess from fine print.
+  const [merchant, setMerchant] = useState(
+    () => matchMerchant(scan?.textLines, scan?.merchantGuess)?.name || ''
+  )
+
+  // Verbatim. Whatever the scanner read (or the user types) is what shows
+  // and what gets stored.
+  const [number, setNumber] = useState(scan?.number || '')
+
+  // The native scanner resolves the PIN when it can; detectPin covers the
+  // browser/harness path and scans where only raw text came back.
+  const scannedPin = useMemo(
+    () => scan?.pin || detectPin(scan?.textLines, scan?.number),
+    [scan]
+  )
+  const [pin, setPin] = useState(scannedPin)
+  const [showPin, setShowPin] = useState(!!scannedPin)
+
   const [showBalance, setShowBalance] = useState(false)
   const [balance, setBalance] = useState('')
   const [saving, setSaving] = useState(false)
@@ -118,8 +139,10 @@ export default function ConfirmCardScreen({
         kind: CARD_KIND.MERCHANT_GIFT_CARD,
         brand: CARD_BRAND.UNKNOWN,
         merchant: merchant.trim(),
-        number: number.replace(/\s/g, ''),
-        pin: '',
+        // Stored exactly as scanned/typed — only surrounding whitespace
+        // is trimmed. Any internal spacing is the card's own.
+        number: number.trim(),
+        pin: pin.trim(),
         balance: startingBalance,
         startingBalance,
         transactions: [],
@@ -178,15 +201,22 @@ export default function ConfirmCardScreen({
         </div>
 
         {!classification.isOpenLoop ? (
-          <div className="pw-field pw-confirm-field">
+          <div className="pw-field pw-confirm-field pw-confirm-verbatim">
             <label>Card number</label>
             <input
               type="text"
-              inputMode="numeric"
+              inputMode="text"
               value={number}
-              onChange={(e) => setNumber(formatCardNumber(e.target.value))}
+              onChange={(e) => setNumber(e.target.value)}
               placeholder="Scanned automatically"
+              autoComplete="off"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
             />
+            <p className="pw-field-hint">
+              Shown exactly as it reads on the card — check it before saving.
+            </p>
           </div>
         ) : (
           <p className="pw-notice pw-confirm-notice">
@@ -194,6 +224,39 @@ export default function ConfirmCardScreen({
             only the last 4 digits (••{classification.last4}) as a reference.
           </p>
         )}
+
+        {/* PIN and balance are both optional add-ons, collapsed until asked
+            for. Neither gates the save. */}
+        {!classification.isOpenLoop &&
+          (showPin ? (
+            <div className="pw-field pw-confirm-field pw-confirm-verbatim">
+              <label>
+                PIN <span className="pw-optional">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                placeholder="e.g. 4821"
+                autoComplete="off"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus={!scannedPin}
+              />
+              {scannedPin ? (
+                <p className="pw-field-hint">Found a PIN on the card — check it.</p>
+              ) : null}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="pw-confirm-chip"
+              onClick={() => setShowPin(true)}
+            >
+              + Add PIN
+            </button>
+          ))}
 
         {showBalance ? (
           <div className="pw-field pw-confirm-field">
