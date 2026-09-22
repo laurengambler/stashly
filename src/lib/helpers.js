@@ -253,9 +253,22 @@ export const cardMaskedNumber = (card) => {
   return maskNumber(card && card.number)
 }
 
-// Format the full number with spaces every 4 chars for the detail view.
-export const formatNumber = (num) =>
-  (num || '').replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim()
+// What to encode in the scannable barcode.
+//
+// Not always the card number: a gift-card barcode often carries a retail UPC
+// plus an internal serial, and when a card labels its number ("CARD#: …")
+// that printed number is what we show while the barcode payload is what the
+// register needs. Cards saved before barcodeValue existed, and any card
+// where no barcode was read, fall back to the number — which is what they
+// were already scanning.
+export const cardBarcodeValue = (card) =>
+  (card && card.barcodeValue) || (card && card.number) || ''
+
+// Render the full number for the detail view. Deliberately verbatim: the
+// detail screen is where someone reads the number off to a cashier or
+// compares it against the physical card, and re-grouping it in fours made
+// it read differently from the card itself.
+export const formatNumber = (num) => (num || '').trim()
 
 // --- Currency: single source of truth ------------------------------
 // Two helpers, used everywhere. Anything money-shaped that crosses

@@ -155,10 +155,10 @@ function ConfirmSaveModal({ onConfirm, onGoBack, saving }) {
   )
 }
 
-const formatCardNumber = (value) => {
-  const digits = value.replace(/\D/g, '')
-  return digits.replace(/(.{4})(?=.)/g, '$1 ')
-}
+// Card numbers are kept verbatim — what the user types is what is shown
+// and stored. We used to strip non-digits and re-group in fours, which
+// made the field read differently from the card in the user's hand and
+// silently dropped letters from alphanumeric gift-card codes.
 
 export default function AddCardScreen({ onCancel, onSave, editCard = null }) {
   // When editCard is provided we reuse this whole form for editing an
@@ -170,9 +170,7 @@ export default function AddCardScreen({ onCancel, onSave, editCard = null }) {
     isEditing && editCard.kind === CARD_KIND.OPEN_LOOP_PREPAID
 
   const [merchant, setMerchant] = useState(editCard?.merchant || '')
-  const [number, setNumber] = useState(
-    editCard ? formatCardNumber(editCard.number || '') : ''
-  )
+  const [number, setNumber] = useState(editCard?.number || '')
   const [pin, setPin] = useState(editCard?.pin || '')
   const [balance, setBalance] = useState(
     editCard?.startingBalance != null ? String(editCard.startingBalance) : ''
@@ -285,7 +283,7 @@ export default function AddCardScreen({ onCancel, onSave, editCard = null }) {
           }
         : {
             merchant: merchant.trim(),
-            number: number.replace(/\s/g, ''),
+            number: number.trim(),
             pin: pin.trim(),
             notes: notes.trim(),
             color,
@@ -347,7 +345,7 @@ export default function AddCardScreen({ onCancel, onSave, editCard = null }) {
           kind: CARD_KIND.MERCHANT_GIFT_CARD,
           brand: CARD_BRAND.UNKNOWN,
           merchant: merchant.trim(),
-          number: number.replace(/\s/g, ''),
+          number: number.trim(),
           pin: pin.trim(),
           balance: startingBalance,
           startingBalance,
@@ -472,9 +470,12 @@ export default function AddCardScreen({ onCancel, onSave, editCard = null }) {
               <input
                 type="text"
                 value={number}
-                onChange={(e) => setNumber(formatCardNumber(e.target.value))}
+                onChange={(e) => setNumber(e.target.value)}
                 placeholder="Required"
                 autoComplete="off"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
               />
             </div>
             <div className="pw-field">

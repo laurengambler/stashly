@@ -19,6 +19,7 @@ import {
   txid,
   isOpenLoopCard,
   cardMaskedNumber,
+  cardBarcodeValue,
   CARD_BRAND,
   defaultColorForCard,
 } from '../lib/helpers.js'
@@ -398,7 +399,7 @@ function FullscreenBarcode({ card, onClose, onUseCard }) {
       <div className="pw-fullscan-merchant">{card.merchant}</div>
 
       <div className="pw-fullscan-barcode-wrap">
-        <Barcode value={card.number} large />
+        <Barcode value={cardBarcodeValue(card)} large />
       </div>
 
       <div className="pw-fullscan-hint">Turn brightness up for easier scanning.</div>
@@ -606,7 +607,7 @@ export default function CardDetailScreen({
           }}
         >
           <div className="pw-barcode-label">Tap to scan at register</div>
-          <Barcode value={card.number} />
+          <Barcode value={cardBarcodeValue(card)} />
           <div className="pw-barcode-cta-hint">Opens fullscreen scan view</div>
         </button>
       )}
