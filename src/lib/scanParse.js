@@ -1,20 +1,49 @@
 // lib/scanParse.js
-// Parsing recognized card text into fields, for the cases the native
-// plugin didn't already resolve.
+// Parsing recognized card text into fields.
 //
-// The native scanner does its own extraction (it has to — the live
-// viewfinder highlights fields as you frame the card), so on device
-// `scan.pin` normally arrives already filled. This module is the
-// fallback: the browser/harness path, and any scan where the native
-// side found text but no PIN.
+// Mirrors CardTextParser in ios/App/App/StashScannerPlugin.swift, which is
+// what actually runs on device (the live viewfinder has to resolve fields
+// frame by frame to highlight them). This copy covers the browser/harness
+// path and any scan where the native side returned text but no fields.
+// The two must stay in step — test/scanParse.test.mjs is the spec for
+// both, so change the tests and both implementations together.
+//
+// THE LAYOUT PROBLEM. Cards print more than one number on a line:
+//
+//     Card #1234567890        18934
+//
+// Two fields, one line. Reducing that line to its digits — which is what
+// this used to do — yields 123456789018934: the card number and the PIN
+// fused into a number that matches no card. The fix is to treat a wide
+// horizontal gap as a field boundary and parse each run separately.
+//
+// Grouped numbers are the complication, because a card number is often
+// printed with gaps of its own:
+//
+//     1234  5678  9012  3456
+//
+// So after splitting on wide gaps we re-join neighbouring runs that look
+// like one grouped number — equal-length digit groups of at most 5.
+// "1234567890" and "18934" have different shapes and stay apart.
 
-// Labels that mean "the thing after me is a PIN". Deliberately narrow:
-// we only prefill a PIN that the card itself clearly labels as one.
-// Anything vaguer stays unfilled — a wrong PIN is worse than no PIN.
+// Labels that mean "the number after me is the CARD number". When a card
+// says so, believe it over any length heuristic.
+const CARD_LABEL = /\b(?:card|acct|account|gift\s*card)\s*(?:#|№|nos?\b|no\.|number|num\b)/i
+
+// Labels that mean "what follows is a PIN". Deliberately narrow: we only
+// prefill a PIN the card clearly labels as one, or one that the layout
+// makes obvious (see the trailing-run rule in parseCardFields).
 const PIN_LABEL = /\b(?:p\s*i\s*n|pin\s*(?:no|number|code|#)|access\s*(?:code|number|#)|security\s*code|scratch\s*(?:off\s*)?code|redemption\s*code)\b[\s:#.\-]*/i
 
-// A plausible PIN: 3-10 alphanumerics, mostly digits. Long runs are
-// card numbers, not PINs.
+// Two or more spaces is a field boundary, and so is a single tab — one
+// tab is one whitespace character but never accidental spacing. A single
+// space is grouping inside one number ("6011 5000 1234 5678").
+const WIDE_GAP = /\t+|\s{2,}/
+
+const digitsOnly = (s) => (s || '').replace(/\D/g, '')
+
+// A plausible PIN: 3-10 alphanumerics, mostly digits. Longer runs are
+// card numbers.
 const isPlausiblePin = (raw) => {
   const s = (raw || '').trim()
   if (!/^[A-Za-z0-9]{3,10}$/.test(s)) return false
@@ -22,7 +51,39 @@ const isPlausiblePin = (raw) => {
   return digits >= 3 && digits * 2 >= s.length
 }
 
-const digitsOnly = (s) => (s || '').replace(/\D/g, '')
+// If `s` is nothing but equal-length digit groups of at most 5 ("1234",
+// "1234 5678"), return that group length; otherwise 0. This is what tells
+// a chopped-up card number from a genuinely separate field.
+const groupLength = (s) => {
+  if (!/^\d+( \d+)*$/.test(s)) return 0
+  const parts = s.split(' ')
+  const n = parts[0].length
+  if (n > 5) return 0
+  return parts.every((p) => p.length === n) ? n : 0
+}
+
+/**
+ * Split one visual line into fields at wide gaps, then re-join runs that
+ * are really one grouped number.
+ */
+export const segmentLine = (line) => {
+  const raw = String(line || '')
+    .split(WIDE_GAP)
+    .map((s) => s.trim())
+    .filter(Boolean)
+
+  const out = []
+  for (const seg of raw) {
+    const g = groupLength(seg)
+    const prev = out[out.length - 1]
+    if (g && prev && groupLength(prev) === g) {
+      out[out.length - 1] = `${prev} ${seg}`
+    } else {
+      out.push(seg)
+    }
+  }
+  return out
+}
 
 /**
  * Find a clearly labeled PIN in recognized text.
@@ -62,4 +123,96 @@ export const detectPin = (textLines = [], excludeNumber = '') => {
   }
 
   return ''
+}
+
+/**
+ * Resolve the card number and PIN from recognized text.
+ *
+ * `textLines` must be VISUAL lines — everything printed across one line of
+ * the card, wide gaps preserved. Both native paths build them that way
+ * from bounding boxes so they segment identically; see visualLines() in
+ * StashScannerPlugin.swift.
+ *
+ * Precedence for the number:
+ *   1. a barcode payload (exact, and keeps letters)
+ *   2. a run the card labels "Card #" / "Card number"
+ *   3. the longest remaining digit run on the card
+ *
+ * Precedence for the PIN:
+ *   1. a labeled PIN
+ *   2. a separate, shorter run sitting after the number on the same line
+ *
+ * Returns { number, pin, numberFromLabel }.
+ */
+export const parseCardFields = (textLines = [], barcode = '') => {
+  const lines = (textLines || [])
+    .map((l) => String(l || '').trim())
+    .filter(Boolean)
+
+  // Flatten to positioned segments so we can reason about "later on the
+  // same line", which is what makes the trailing run a PIN.
+  const segs = []
+  lines.forEach((line, lineIndex) => {
+    segmentLine(line).forEach((text, pos) => {
+      segs.push({ text, digits: digitsOnly(text), lineIndex, pos })
+    })
+  })
+
+  const isCardLabeled = (i) => {
+    const s = segs[i]
+    if (CARD_LABEL.test(s.text)) return true
+    // "Card #" can also sit in its own segment before the digits.
+    const prev = segs[i - 1]
+    return !!(
+      prev &&
+      prev.lineIndex === s.lineIndex &&
+      !prev.digits &&
+      CARD_LABEL.test(prev.text)
+    )
+  }
+
+  const pinLabeled = detectPin(lines, '')
+  const pinLabeledDigits = digitsOnly(pinLabeled)
+
+  // Resolve the number from the text even when a barcode is present: the
+  // barcode wins as the value, but we still need to know WHERE on the card
+  // the number sits to spot a trailing PIN beside it.
+  let numberSeg = null
+  let numberFromLabel = false
+
+  const labeledIndex = segs.findIndex(
+    (s, i) => s.digits.length >= 6 && isCardLabeled(i)
+  )
+  if (labeledIndex >= 0) {
+    numberSeg = segs[labeledIndex]
+    numberFromLabel = true
+  } else {
+    for (const s of segs) {
+      if (s.digits.length < 8) continue
+      if (pinLabeledDigits && s.digits === pinLabeledDigits) continue
+      if (!numberSeg || s.digits.length > numberSeg.digits.length) numberSeg = s
+    }
+  }
+
+  const number = barcode ? String(barcode) : numberSeg ? numberSeg.digits : ''
+
+  let pin = pinLabeled
+  if (!pin && numberSeg) {
+    // A separate, shorter run after the number on the same line. On a card
+    // reading "Card #1234567890   18934" this is the PIN, and it is the
+    // only thing distinguishing it from part of the number.
+    const trailing = segs.find(
+      (s) =>
+        s.lineIndex === numberSeg.lineIndex &&
+        s.pos > numberSeg.pos &&
+        s.digits.length >= 3 &&
+        s.digits.length <= 10 &&
+        s.digits.length < numberSeg.digits.length
+    )
+    if (trailing) pin = trailing.digits
+  }
+
+  if (pin && number && digitsOnly(pin) === digitsOnly(number)) pin = ''
+
+  return { number, pin, numberFromLabel }
 }

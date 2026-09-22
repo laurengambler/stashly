@@ -29,7 +29,7 @@ import {
   CARD_COLORS,
 } from '../lib/helpers.js'
 import { matchMerchant, normalizeMerchantName } from '../lib/merchants.js'
-import { detectPin } from '../lib/scanParse.js'
+import { parseCardFields } from '../lib/scanParse.js'
 import { savePhoto, newPhotoId } from '../lib/photoStorage.js'
 import { track } from '../lib/posthog.js'
 
@@ -43,6 +43,7 @@ export default function ConfirmCardScreen({
   batchPosition,
   onSave,
   onBack,
+  onCancel,
 }) {
   // Merchant autofill is gated on the known-merchant list. No match means
   // an empty field on purpose — we do not guess from fine print.
@@ -68,16 +69,19 @@ export default function ConfirmCardScreen({
     return () => clearTimeout(t)
   }, [scanMatch])
 
-  // Verbatim. Whatever the scanner read (or the user types) is what shows
-  // and what gets stored.
-  const [number, setNumber] = useState(scan?.number || '')
-
-  // The native scanner resolves the PIN when it can; detectPin covers the
-  // browser/harness path and scans where only raw text came back.
-  const scannedPin = useMemo(
-    () => scan?.pin || detectPin(scan?.textLines, scan?.number),
+  // The native scanner resolves both fields from the card's layout (a line
+  // can carry a number AND a PIN). parseCardFields is the same rule set in
+  // JS, covering the browser/harness path and any scan that came back with
+  // text but no resolved fields.
+  const parsed = useMemo(
+    () => parseCardFields(scan?.textLines, scan?.barcode),
     [scan]
   )
+
+  // Verbatim. Whatever the scanner read (or the user types) is what shows
+  // and what gets stored.
+  const [number, setNumber] = useState(scan?.number || parsed.number)
+  const scannedPin = scan?.pin || parsed.pin
   const [pin, setPin] = useState(scannedPin)
   const [showPin, setShowPin] = useState(!!scannedPin)
 
@@ -212,7 +216,22 @@ export default function ConfirmCardScreen({
           Retake
         </button>
         <h2 className="pw-form-title">Confirm card</h2>
-        <span style={{ minWidth: 44 }} />
+        {/* Leaving the flow used to mean tapping Retake first, to reach the
+            capture screen's Cancel. Two taps, and the first one looks like
+            it discards the scan. This is the way out, always on screen. */}
+        <button
+          className="pw-nav pw-nav-close"
+          onClick={() => {
+            track('card_add_cancelled', { from: 'confirm' })
+            onCancel?.()
+          }}
+          disabled={saving}
+          aria-label="Cancel adding this card"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
       <div className="pw-confirm-body">

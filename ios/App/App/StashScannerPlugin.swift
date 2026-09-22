@@ -47,14 +47,93 @@ import CoreGraphics
 
 // MARK: - Field parsing (shared by the live pass and the still pass)
 
+/// A recognized string with its place on the card, normalized to a
+/// top-left origin in 0...1 so the live and still paths can be reduced to
+/// the same thing.
+struct PositionedText {
+    let text: String
+    let rect: CGRect
+}
+
 /// Pulls card fields out of recognized text. Pure and nonisolated so the
 /// live scanner (main actor) and the Vision still pass (background queue)
 /// can both use it, and so the two paths can never disagree about what a
 /// PIN looks like.
+///
+/// THE LAYOUT PROBLEM. Cards print more than one field on a line:
+///
+///     Card #1234567890        18934
+///
+/// Reducing that line to its digits — which this used to do — fuses the
+/// card number and the PIN into 123456789018934, a number that matches no
+/// card. Worse, the two capture paths used to disagree about it: VisionKit
+/// hands the live scanner ONE RecognizedItem per visual line, so the live
+/// path saw that whole string at once, while VNRecognizeTextRequest splits
+/// a still image at wide gaps and handed the still path two separate
+/// observations. The still path got the number right by luck of
+/// segmentation, not because it understood the layout — and it dropped the
+/// PIN entirely, there being no PIN label.
+///
+/// So both paths now go through visualLines(), which rebuilds lines from
+/// bounding boxes and preserves wide gaps, and then through parseFields(),
+/// which treats a wide gap as a field boundary. Same input shape, same
+/// answer, whichever path produced it.
+///
+/// Mirrors src/lib/scanParse.js; test/scanParse.test.mjs is the spec for
+/// both. Change a rule in one and change it in the other.
 enum CardTextParser {
 
     static func digits(_ s: String) -> String {
         String(s.filter { $0.isNumber })
+    }
+
+    // MARK: Visual lines
+
+    /// Rebuild visual lines from positioned text: group fragments that sit
+    /// at the same height, order them left to right, and preserve a wide
+    /// horizontal gap as a run of spaces so parseFields can see it.
+    static func visualLines(from items: [PositionedText]) -> [String] {
+        let clean = items.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !clean.isEmpty else { return [] }
+
+        let sorted = clean.sorted { $0.rect.midY < $1.rect.midY }
+        var groups: [[PositionedText]] = []
+
+        for item in sorted {
+            if var last = groups.last,
+               let ref = last.first,
+               sharesLine(ref.rect, item.rect, others: last) {
+                last.append(item)
+                groups[groups.count - 1] = last
+            } else {
+                groups.append([item])
+            }
+        }
+
+        return groups.map { group -> String in
+            let ordered = group.sorted { $0.rect.minX < $1.rect.minX }
+            var line = ordered[0].text.trimmingCharacters(in: .whitespaces)
+            for i in 1..<ordered.count {
+                let gap = ordered[i].rect.minX - ordered[i - 1].rect.maxX
+                // A gap wider than a few percent of the card is a field
+                // boundary; anything tighter is ordinary word spacing.
+                line += (gap > 0.035 ? "   " : " ")
+                line += ordered[i].text.trimmingCharacters(in: .whitespaces)
+            }
+            return line
+        }
+    }
+
+    /// Two fragments are on the same visual line when their vertical extents
+    /// overlap by more than half the shorter one.
+    private static func sharesLine(_ a: CGRect, _ b: CGRect, others: [PositionedText]) -> Bool {
+        let top = max(a.minY, b.minY)
+        let bottom = min(a.maxY, b.maxY)
+        let overlap = bottom - top
+        guard overlap > 0 else { return false }
+        let shorter = min(a.height, b.height)
+        guard shorter > 0 else { return false }
+        return overlap / shorter > 0.5
     }
 
     /// Labels that mean "what follows is a PIN". Deliberately narrow — we
@@ -123,17 +202,157 @@ enum CardTextParser {
         return ""
     }
 
-    /// The card number. A barcode payload is authoritative when present —
-    /// it is the number, precisely, and it keeps any letters (some gift
-    /// cards are alphanumeric). Otherwise the longest digit run in the text.
-    static func number(barcode: String?, lines: [String], pin: String) -> String {
-        if let b = barcode, !b.isEmpty { return b }
-        let pinDigits = digits(pin)
-        let best = lines
-            .map { digits($0) }
-            .filter { $0.count >= 8 && (pinDigits.isEmpty || $0 != pinDigits) }
-            .max(by: { $0.count < $1.count })
-        return best ?? ""
+    // MARK: Segmentation
+
+    /// Labels meaning "the number after me is the CARD number". When a card
+    /// says so, believe it over any length heuristic.
+    private static let cardLabel = try? NSRegularExpression(
+        pattern: "\\b(?:card|acct|account|gift\\s*card)\\s*(?:#|№|nos?\\b|no\\.|number|num\\b)",
+        options: [.caseInsensitive]
+    )
+
+    private static func matches(_ rx: NSRegularExpression?, _ s: String) -> Bool {
+        guard let rx else { return false }
+        return rx.firstMatch(in: s, options: [], range: NSRange(location: 0, length: (s as NSString).length)) != nil
+    }
+
+    /// If `s` is nothing but equal-length digit groups of at most 5
+    /// ("1234", "1234 5678"), the group length; otherwise 0. This is what
+    /// separates a card number printed with airy tracking from two fields.
+    private static func groupLength(_ s: String) -> Int {
+        let parts = s.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        guard !parts.isEmpty else { return 0 }
+        guard parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy(\.isNumber) }) else { return 0 }
+        let n = parts[0].count
+        guard n <= 5, parts.allSatisfy({ $0.count == n }) else { return 0 }
+        return n
+    }
+
+    /// Split one visual line into fields at wide gaps, then re-join runs
+    /// that are really one grouped number.
+    static func segmentLine(_ line: String) -> [String] {
+        // Two or more spaces is a field boundary, and so is a tab. A single
+        // space is grouping inside one number ("6011 5000 1234 5678").
+        var raw: [String] = []
+        var current = ""
+        var run = 0
+        for ch in line {
+            if ch == "\t" || ch == " " || ch.isWhitespace {
+                run += (ch == "\t") ? 2 : 1
+                continue
+            }
+            if run >= 2 {
+                if !current.isEmpty { raw.append(current) }
+                current = ""
+            } else if run == 1, !current.isEmpty {
+                current += " "
+            }
+            run = 0
+            current.append(ch)
+        }
+        if !current.isEmpty { raw.append(current) }
+
+        var out: [String] = []
+        for seg in raw {
+            let trimmed = seg.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            let g = groupLength(trimmed)
+            if g > 0, let prev = out.last, groupLength(prev) == g {
+                out[out.count - 1] = prev + " " + trimmed
+            } else {
+                out.append(trimmed)
+            }
+        }
+        return out
+    }
+
+    struct ParsedFields {
+        var number = ""
+        var pin = ""
+        var numberFromLabel = false
+    }
+
+    private struct Segment {
+        let text: String
+        let digits: String
+        let lineIndex: Int
+        let position: Int
+    }
+
+    /// Resolve the card number and PIN together — segmentation decides both,
+    /// so they cannot be worked out independently.
+    ///
+    /// Number precedence: a barcode payload, then a run the card labels
+    /// "Card #", then the longest remaining digit run.
+    /// PIN precedence: a labeled PIN, then a separate shorter run sitting
+    /// after the number on the same line.
+    static func parseFields(barcode: String?, lines rawLines: [String]) -> ParsedFields {
+        let lines = rawLines
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        var segs: [Segment] = []
+        for (li, line) in lines.enumerated() {
+            for (pos, text) in segmentLine(line).enumerated() {
+                segs.append(Segment(text: text, digits: digits(text), lineIndex: li, position: pos))
+            }
+        }
+
+        func isCardLabeled(_ i: Int) -> Bool {
+            let s = segs[i]
+            if matches(cardLabel, s.text) { return true }
+            // "Card #" can also sit in its own segment before the digits.
+            guard i > 0 else { return false }
+            let prev = segs[i - 1]
+            return prev.lineIndex == s.lineIndex && prev.digits.isEmpty && matches(cardLabel, prev.text)
+        }
+
+        let pinLabeled = pin(in: lines, excluding: "")
+        let pinLabeledDigits = digits(pinLabeled)
+
+        // Resolve where the number sits even when a barcode supplies the
+        // value: we still need its position to spot a trailing PIN beside it.
+        var numberSeg: Segment?
+        var fromLabel = false
+
+        if let idx = segs.indices.first(where: { segs[$0].digits.count >= 6 && isCardLabeled($0) }) {
+            numberSeg = segs[idx]
+            fromLabel = true
+        } else {
+            for s in segs where s.digits.count >= 8 {
+                if !pinLabeledDigits.isEmpty && s.digits == pinLabeledDigits { continue }
+                if numberSeg == nil || s.digits.count > numberSeg!.digits.count { numberSeg = s }
+            }
+        }
+
+        var out = ParsedFields()
+        out.numberFromLabel = fromLabel
+        if let b = barcode, !b.isEmpty {
+            out.number = b
+        } else if let seg = numberSeg {
+            out.number = seg.digits
+        }
+
+        out.pin = pinLabeled
+        if out.pin.isEmpty, let seg = numberSeg {
+            // A separate, shorter run after the number on the same line. On
+            // a card reading "Card #1234567890   18934" this is the PIN, and
+            // the gap is the only thing that says so.
+            if let trailing = segs.first(where: {
+                $0.lineIndex == seg.lineIndex
+                    && $0.position > seg.position
+                    && $0.digits.count >= 3
+                    && $0.digits.count <= 10
+                    && $0.digits.count < seg.digits.count
+            }) {
+                out.pin = trailing.digits
+            }
+        }
+
+        if !out.pin.isEmpty, !out.number.isEmpty, digits(out.pin) == digits(out.number) {
+            out.pin = ""
+        }
+        return out
     }
 
     /// A hint only. JS gates this through the known-merchant list before
@@ -149,24 +368,58 @@ enum CardTextParser {
     }
 }
 
-/// Everything a scan resolved. Built live, then topped up from the still
-/// frame for anything the live pass never saw.
+/// Everything a scan resolved. Built live, then reconciled against the
+/// still frame taken at commit time.
 struct ScanFields {
+    /// Where the number came from, which decides whether the still frame is
+    /// allowed to overrule it.
+    enum NumberSource {
+        case none
+        case text      // longest digit run — a guess, and overrulable
+        case label     // "Card #…" — still a reading of one frame
+        case barcode   // exact payload
+        case userTap   // the user pointed at it
+    }
+
     var number = ""
     var pin = ""
     var barcode = ""
     var barcodeFormat = ""
     var merchantGuess = ""
     var textLines: [String] = []
+    var numberSource: NumberSource = .none
 
     var hasAnything: Bool {
         !number.isEmpty || !pin.isEmpty || !barcode.isEmpty
     }
 
-    /// Fill only what is still empty. Live wins over the still frame.
+    /// Reconcile the live reading with the still frame captured on commit.
+    ///
+    /// The still frame gets a full-resolution, motion-free look at the card,
+    /// so when the two disagree about the NUMBER it is the better witness
+    /// and wins. Two exceptions: a barcode payload is exact, and a number
+    /// the user tapped is an explicit choice — neither is second-guessed.
+    ///
+    /// Segmentation decides the number and the PIN together, so a disagreement
+    /// carries the still frame's PIN across with it. A PIN the still frame
+    /// simply did not see is kept rather than cleared: it is far more likely
+    /// a recognition miss than a segmentation disagreement, and the field is
+    /// visible and optional, so the user can clear it. Silently losing a
+    /// correct PIN is the worse failure.
     func merging(fallback: ScanFields) -> ScanFields {
         var out = self
-        if out.number.isEmpty { out.number = fallback.number }
+
+        let overrulable = out.numberSource == .text || out.numberSource == .label
+        if overrulable, !fallback.number.isEmpty, fallback.number != out.number {
+            out.number = fallback.number
+            out.numberSource = fallback.numberSource
+            if !fallback.pin.isEmpty { out.pin = fallback.pin }
+        }
+
+        if out.number.isEmpty {
+            out.number = fallback.number
+            out.numberSource = fallback.numberSource
+        }
         if out.pin.isEmpty { out.pin = fallback.pin }
         if out.barcode.isEmpty { out.barcode = fallback.barcode }
         if out.barcodeFormat.isEmpty { out.barcodeFormat = fallback.barcodeFormat }
@@ -315,24 +568,33 @@ public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
                 barcodeFormat = best.symbology.rawValue
             }
 
-            // OCR lines in reading order (top to bottom) so the "PIN label
-            // sits above the code" rule in CardTextParser.pin works here too.
-            // Vision's origin is bottom-left, hence the descending sort.
-            let observations = (textReq.results ?? []).sorted {
-                $0.boundingBox.origin.y > $1.boundingBox.origin.y
-            }
-            let lines: [String] = observations.compactMap {
-                guard let t = $0.topCandidates(1).first?.string else { return nil }
+            // Rebuild visual lines from the observations rather than taking
+            // each one as a line of its own. Vision splits a still image at
+            // wide gaps, so "Card #1234567890   18934" arrives as two
+            // observations; regrouping them by position and preserving the
+            // gap is what lets the parser see one line with two fields —
+            // and is what makes this path agree with the live one.
+            // Vision's origin is bottom-left, so flip y to top-down.
+            let positioned: [PositionedText] = (textReq.results ?? []).compactMap { obs in
+                guard let t = obs.topCandidates(1).first?.string else { return nil }
                 let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
-                return trimmed.isEmpty ? nil : trimmed
+                guard !trimmed.isEmpty else { return nil }
+                let bb = obs.boundingBox
+                let rect = CGRect(x: bb.minX, y: 1 - bb.maxY, width: bb.width, height: bb.height)
+                return PositionedText(text: trimmed, rect: rect)
             }
+            let lines = CardTextParser.visualLines(from: positioned)
+            let parsed = CardTextParser.parseFields(barcode: barcode, lines: lines)
 
             var fields = ScanFields()
             fields.textLines = lines
             fields.barcode = barcode
             fields.barcodeFormat = barcodeFormat
-            fields.pin = CardTextParser.pin(in: lines, excluding: barcode)
-            fields.number = CardTextParser.number(barcode: barcode, lines: lines, pin: fields.pin)
+            fields.pin = parsed.pin
+            fields.number = parsed.number
+            fields.numberSource = !barcode.isEmpty
+                ? .barcode
+                : (parsed.number.isEmpty ? .none : (parsed.numberFromLabel ? .label : .text))
             fields.merchantGuess = CardTextParser.merchantGuess(from: lines)
 
             let b64 = self.jpegBase64(image)
@@ -613,39 +875,61 @@ final class LiveScanCoordinator: NSObject, DataScannerViewControllerDelegate {
     /// Recompute the live fields from everything currently recognized and
     /// push that into the status readout.
     private func refresh() {
-        var texts: [(String, CGFloat, CGFloat)] = [] // transcript, y, x
+        // VisionKit hands us ONE item per visual line, so a line carrying
+        // both a number and a PIN arrives as a single transcript. Position
+        // each item and rebuild lines the same way the still path does; the
+        // wide gap inside the transcript survives into segmentLine.
+        let viewSize = scanner?.view.bounds.size ?? .zero
+        let w = max(viewSize.width, 1)
+        let h = max(viewSize.height, 1)
+
+        var positioned: [PositionedText] = []
         var barcode = ""
         var barcodeFormat = ""
 
         for item in items.values {
+            let b = item.bounds
+            let minX = min(b.topLeft.x, b.bottomLeft.x)
+            let maxX = max(b.topRight.x, b.bottomRight.x)
+            let minY = min(b.topLeft.y, b.topRight.y)
+            let maxY = max(b.bottomLeft.y, b.bottomRight.y)
+            let rect = CGRect(x: minX / w, y: minY / h,
+                              width: max(maxX - minX, 0) / w,
+                              height: max(maxY - minY, 0) / h)
+
             switch item {
             case .text(let t):
                 let s = t.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !s.isEmpty {
-                    texts.append((s, item.bounds.topLeft.y, item.bounds.topLeft.x))
-                }
-            case .barcode(let b):
-                if let payload = b.payloadStringValue, !payload.isEmpty, barcode.isEmpty {
+                if !s.isEmpty { positioned.append(PositionedText(text: s, rect: rect)) }
+            case .barcode(let code):
+                if let payload = code.payloadStringValue, !payload.isEmpty, barcode.isEmpty {
                     barcode = payload
-                    barcodeFormat = b.observation.symbology.rawValue
+                    barcodeFormat = code.observation.symbology.rawValue
                 }
             @unknown default:
                 break
             }
         }
 
-        // Reading order: top to bottom, then left to right. The PIN rule
-        // depends on a label line preceding its code.
-        texts.sort { $0.1 == $1.1 ? $0.2 < $1.2 : $0.1 < $1.1 }
-        let lines = texts.map { $0.0 }
+        let lines = CardTextParser.visualLines(from: positioned)
+        let parsed = CardTextParser.parseFields(barcode: barcode, lines: lines)
 
         var f = ScanFields()
         f.textLines = lines
         f.barcode = barcode
         f.barcodeFormat = barcodeFormat
-        f.pin = CardTextParser.pin(in: lines, excluding: barcode)
-        f.number = numberOverride ?? CardTextParser.number(barcode: barcode, lines: lines, pin: f.pin)
+        f.pin = parsed.pin
         f.merchantGuess = CardTextParser.merchantGuess(from: lines)
+
+        if let override = numberOverride, !override.isEmpty {
+            f.number = override
+            f.numberSource = .userTap
+        } else {
+            f.number = parsed.number
+            f.numberSource = !barcode.isEmpty
+                ? .barcode
+                : (parsed.number.isEmpty ? .none : (parsed.numberFromLabel ? .label : .text))
+        }
         live = f
 
         render(f)

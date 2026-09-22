@@ -99,6 +99,7 @@ export default function AddCardFlow({ onCancel, onSave }) {
         batchPosition={savedCount + 1}
         onSave={handleSave}
         onBack={() => setStep('capture')}
+        onCancel={onCancel}
       />
     )
   }
