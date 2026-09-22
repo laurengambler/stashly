@@ -91,6 +91,16 @@ export default function ConfirmCardScreen({
   )
   const scannedPin = scan?.pin || parsed.pin
   const [pin, setPin] = useState(scannedPin)
+
+  // What the scan put in each field, frozen at mount. Compared against the
+  // final values at save to report which prefills the user had to correct —
+  // the honest measure of whether the scanner is actually helping. Booleans
+  // only; no field values ever leave the device.
+  const prefill = useRef({
+    number: validatedNumber(scan?.number) || parsed.number,
+    pin: scannedPin,
+    merchant: scanMatch?.name || '',
+  })
   const [showPin, setShowPin] = useState(!!scannedPin)
 
   const [showBalance, setShowBalance] = useState(false)
@@ -217,7 +227,28 @@ export default function ConfirmCardScreen({
     }
 
     try {
-      await onSave(payload, { addAnother })
+      // Which fields the scan filled, and which of those the user had to
+      // correct before saving. Booleans only — never the values.
+      //
+      // `balance` is never prefilled today (nothing reads a balance off a
+      // card), so its two flags are always false. They are emitted anyway so
+      // the event's shape does not change if balance prefill ever lands.
+      const edited = (before, after) =>
+        !!before && before.trim() !== (after || '').trim()
+
+      await onSave(payload, {
+        addAnother,
+        fields: {
+          prefilled_number: !!prefill.current.number,
+          prefilled_pin: !!prefill.current.pin,
+          prefilled_merchant: !!prefill.current.merchant,
+          prefilled_balance: false,
+          edited_number: edited(prefill.current.number, number),
+          edited_pin: edited(prefill.current.pin, pin),
+          edited_merchant: edited(prefill.current.merchant, merchant),
+          edited_balance: false,
+        },
+      })
       // Parent handles navigation (next scan or back to wallet).
     } catch (err) {
       setError(err?.message || 'Could not save. Please try again.')

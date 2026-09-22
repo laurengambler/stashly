@@ -282,6 +282,12 @@ export default function App() {
         source: 'manual',
         method: meta.method || 'manual',
         batch_position: meta.batchPosition || 1,
+        // Scan adds also carry prefilled_* / edited_* booleans describing
+        // which fields the scanner filled and which of those the user had to
+        // correct — the measure of whether scanning actually saves work.
+        // Absent on manual adds, which have nothing to prefill. Booleans
+        // only; no field values are ever sent.
+        ...(meta.fields || {}),
       })
       return saved
     } catch (err) {

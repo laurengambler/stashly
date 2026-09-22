@@ -67,9 +67,12 @@ export default function AddCardFlow({ onCancel, onSave }) {
       return scanImage(base64)
     }, 'photos')
 
-  const handleSave = async (payload, { addAnother }) => {
+  const handleSave = async (payload, { addAnother, fields }) => {
     const batchPosition = savedCount + 1
-    await onSave(payload, { method, batchPosition })
+    // `fields` comes from the confirm screen and describes which fields the
+    // scan prefilled and which of those the user corrected. Only the
+    // capture paths supply it; manual entry has nothing to prefill.
+    await onSave(payload, { method, batchPosition, fields })
     setSavedCount(batchPosition)
     if (addAnother) {
       setScan(null)
