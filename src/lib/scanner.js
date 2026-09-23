@@ -66,6 +66,70 @@ export const scanImage = async (base64) => {
   return StashScanner.scanImage({ base64 })
 }
 
+/**
+ * Classify a capture failure so the UI can respond to it.
+ *
+ * Three outcomes:
+ *   { cancelled: true }              the user backed out — say nothing
+ *   { blocked: true, reason, message } the picker or camera never opened —
+ *                                    show the message, stay on capture
+ *   { reason }                       it ran but found nothing — the confirm
+ *                                    screen opens with empty fields
+ *
+ * The distinction matters: a blocked capture that routes to the confirm
+ * screen looks to the user like the scan simply found nothing, which is a
+ * lie — the picker never opened. And a blocked capture that is swallowed
+ * entirely is a dead button, which is how "From photos" behaved in 1.3.
+ *
+ * Matching is on message text because that is all @capacitor/camera gives
+ * us; its rejections are plain strings (see CameraPlugin.swift).
+ */
+export const describeCaptureError = (err) => {
+  const raw = String(err?.message || err?.errorMessage || err || '')
+  const msg = raw.toLowerCase()
+
+  // Our own scanLive rejects with code 'cancelled'; Capacitor rejects with
+  // "User cancelled photos app".
+  if (!raw || err?.code === 'cancelled' || msg.includes('cancel')) {
+    return { cancelled: true }
+  }
+
+  // A missing usage-description string. Should be unreachable now, but if a
+  // build ever ships without one this is the signal that says so.
+  if (msg.includes('info.plist') || msg.includes('usagedescription')) {
+    return {
+      blocked: true,
+      reason: 'missing_usage_description',
+      message:
+        "Stashly can't open your photos in this version. Please update to the latest version, or add the card manually below.",
+    }
+  }
+
+  if (msg.includes('denied') || msg.includes('permission') || msg.includes('restricted')) {
+    const photos = msg.includes('photo')
+    return {
+      blocked: true,
+      reason: photos ? 'photos_permission_denied' : 'camera_permission_denied',
+      message: photos
+        ? 'Stashly needs access to your photos. Open Settings › Stashly › Photos, then try again.'
+        : 'Stashly needs access to your camera. Open Settings › Stashly › Camera, then try again.',
+    }
+  }
+
+  if (msg.includes('not supported') || msg.includes('unavailable') || msg.includes('simulator')) {
+    return {
+      blocked: true,
+      reason: 'scanner_unavailable',
+      message:
+        "Scanning isn't available on this device. You can pick a photo instead, or add the card manually below.",
+    }
+  }
+
+  // It got far enough to try. Let the confirm screen open with empty fields
+  // rather than blocking — the user can still type the card in.
+  return { reason: 'recognition_failed' }
+}
+
 // Did the scan surface anything usable? Drives the capture_failed event.
 //
 // "Usable" means the user is about to see a field already filled in. A raw

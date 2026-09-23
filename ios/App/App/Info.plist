@@ -37,6 +37,15 @@
 	<string>Stashly uses the camera to scan your gift card, so it can fill in the card number and PIN for you instead of you typing them, and keep a photo of the card for reference. Scanning happens entirely on this device.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Stashly opens your photo library so you can add a gift card from a photo you already took. It reads the card number and PIN from that photo on this device, and keeps the photo with the card.</string>
+	<!-- REQUIRED even though Stashly never writes to the photo library.
+	     @capacitor/camera's checkUsageDescriptions() iterates
+	     CameraPropertyListKeys.allCases and rejects getPhoto outright if ANY
+	     of the three keys is absent, whatever the call actually does. Removing
+	     this key in 7ee5144 therefore broke "From photos" in 1.3 — the picker
+	     never opened. Do not remove it while that plugin is used for the
+	     photos path. -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Stashly does not add photos to your photo library. It only reads the gift card photo you choose.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

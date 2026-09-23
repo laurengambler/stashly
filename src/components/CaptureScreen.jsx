@@ -6,6 +6,7 @@
 export default function CaptureScreen({
   savedCount = 0,
   busy = false,
+  error = null,
   onScan,
   onPhotos,
   onManual,
@@ -35,6 +36,15 @@ export default function CaptureScreen({
             ? 'Scan the next card, or finish up.'
             : 'Scan a card or pick a screenshot — Stashly reads the name and number for you.'}
         </p>
+
+        {/* A capture that never opened. Sits above the buttons so it is the
+            first thing read after a tap that appeared to do nothing, and
+            "Enter manually instead" below stays available as the way out. */}
+        {error && (
+          <p className="pw-error pw-capture-error" role="alert">
+            {error}
+          </p>
+        )}
 
         <button
           type="button"

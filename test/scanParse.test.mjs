@@ -15,6 +15,66 @@ import {
   validatedNumber,
 } from '../src/lib/scanParse.js'
 import { matchMerchant, normalizeMerchantName } from '../src/lib/merchants.js'
+import { describeCaptureError } from '../src/lib/scanner.js'
+
+// ---------------------------------------------------------------------
+// Capture failures must never be silent.
+//
+// Regression from 1.3: "From photos" registered the tap and did nothing.
+// @capacitor/camera rejects getPhoto when ANY of its three usage-description
+// keys is missing — including NSPhotoLibraryAddUsageDescription, which the
+// app never uses and which had been removed — and the call site caught that
+// rejection to null and treated it as a user cancellation. Dead button, no
+// message, and no analytics event either.
+//
+// Messages below are the literal strings @capacitor/camera rejects with
+// (CameraPlugin.swift / CameraTypes.swift).
+// ---------------------------------------------------------------------
+
+test('a missing usage description is reported, not swallowed', () => {
+  const r = describeCaptureError(
+    new Error(
+      'You are missing NSPhotoLibraryAddUsageDescription in your Info.plist file.' +
+        ' Camera will not function without it. Learn more: https://developer.apple.com/…'
+    )
+  )
+  assert.equal(r.cancelled, undefined, 'must not look like a cancellation')
+  assert.equal(r.blocked, true, 'must keep the user on the capture screen')
+  assert.equal(r.reason, 'missing_usage_description')
+  assert.match(r.message, /\S/, 'must carry a message for the user')
+})
+
+test('user cancellation stays silent', () => {
+  assert.equal(describeCaptureError(new Error('User cancelled photos app')).cancelled, true)
+  assert.equal(describeCaptureError({ code: 'cancelled', message: 'cancelled' }).cancelled, true)
+  assert.equal(describeCaptureError(null).cancelled, true, 'no error at all')
+})
+
+test('denied permission names the right setting', () => {
+  const photos = describeCaptureError(new Error('User denied access to photos'))
+  assert.equal(photos.blocked, true)
+  assert.equal(photos.reason, 'photos_permission_denied')
+  assert.match(photos.message, /Photos/)
+
+  const camera = describeCaptureError(new Error('User denied access to camera'))
+  assert.equal(camera.blocked, true)
+  assert.equal(camera.reason, 'camera_permission_denied')
+  assert.match(camera.message, /Camera/)
+})
+
+test('an unavailable scanner is blocked, not routed to an empty confirm', () => {
+  const r = describeCaptureError(new Error('Camera not available while running in Simulator'))
+  assert.equal(r.blocked, true)
+  assert.equal(r.reason, 'scanner_unavailable')
+})
+
+test('a recognition failure still opens the confirm screen', () => {
+  // This one DID run — the user can type the card in, so do not block.
+  const r = describeCaptureError(new Error('Error processing image'))
+  assert.equal(r.blocked, undefined)
+  assert.equal(r.cancelled, undefined)
+  assert.equal(r.reason, 'recognition_failed')
+})
 
 // ---------------------------------------------------------------------
 // THE GUARD. The card number field only ever receives a single validated
