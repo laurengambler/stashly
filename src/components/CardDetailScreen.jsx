@@ -20,7 +20,6 @@ import {
   isOpenLoopCard,
   cardMaskedNumber,
   cardBarcodeValue,
-  CARD_BRAND,
   defaultColorForCard,
 } from '../lib/helpers.js'
 import {
@@ -73,10 +72,16 @@ function CardPhotos({ card, onUpdateCard }) {
     ;(async () => {
       const [fBlob, bBlob] = await Promise.all([
         card.frontPhotoId
-          ? getPhoto(card.frontPhotoId).catch(() => null)
+          ? getPhoto(card.frontPhotoId).catch((e) => {
+              console.warn('Could not load front photo', e)
+              return null
+            })
           : Promise.resolve(null),
         card.backPhotoId
-          ? getPhoto(card.backPhotoId).catch(() => null)
+          ? getPhoto(card.backPhotoId).catch((e) => {
+              console.warn('Could not load back photo', e)
+              return null
+            })
           : Promise.resolve(null),
       ])
       if (cancelled) return
@@ -358,12 +363,6 @@ function CopyNumberButton({ number }) {
       {copied ? 'Copied' : 'Copy'}
     </button>
   )
-}
-
-const brandLabel = (brand) => {
-  if (brand === CARD_BRAND.VISA) return 'Visa'
-  if (brand === CARD_BRAND.MASTERCARD) return 'Mastercard'
-  return 'Prepaid'
 }
 
 // Fullscreen scan view. Opens when the user taps "Scan at register"

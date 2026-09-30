@@ -27,7 +27,8 @@ export default function Barcode({ value, large = false }) {
         height: large ? 180 : 80,
         width: large ? 3 : 1.8,
       })
-    } catch (e) {
+    } catch (err) {
+      console.warn('Could not encode barcode', err)
       svgRef.current.innerHTML =
         '<text x="50%" y="50%" text-anchor="middle" fill="#19123D" font-size="13">Number cannot be encoded</text>'
       svgRef.current.setAttribute('viewBox', '0 0 300 100')

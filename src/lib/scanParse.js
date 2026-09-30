@@ -33,7 +33,7 @@ const CARD_LABEL = /\b(?:card|acct|account|gift\s*card)\s*(?:#|№|nos?\b|no\.|n
 // Labels that mean "what follows is a PIN". Deliberately narrow: we only
 // prefill a PIN the card clearly labels as one, or one that the layout
 // makes obvious (see the trailing-run rule in parseCardFields).
-const PIN_LABEL = /\b(?:p\s*i\s*n|pin\s*(?:no|number|code|#)|access\s*(?:code|number|#)|security\s*code|scratch\s*(?:off\s*)?code|redemption\s*code)\b[\s:#.\-]*/i
+const PIN_LABEL = /\b(?:p\s*i\s*n|pin\s*(?:no|number|code|#)|access\s*(?:code|number|#)|security\s*code|scratch\s*(?:off\s*)?code|redemption\s*code)\b[\s:#.-]*/i
 
 // Two or more spaces is a field boundary, and so is a single tab — one
 // tab is one whitespace character but never accidental spacing. A single

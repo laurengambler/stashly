@@ -289,7 +289,7 @@ export const formatNumber = (num) => (num || '').trim()
 export const sanitizeCurrencyInput = (value) => {
   if (value === null || value === undefined || value === '') return null
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
-  const cleaned = String(value).replace(/[^0-9.\-]/g, '')
+  const cleaned = String(value).replace(/[^0-9.-]/g, '')
   if (!cleaned || cleaned === '-' || cleaned === '.') return null
   const n = parseFloat(cleaned)
   return Number.isNaN(n) ? null : n
@@ -313,7 +313,7 @@ export const balanceSymbol = (b) => {
   if (b === null || b === undefined) return '$'
   if (typeof b !== 'string') return '$'
   const s = b.trim()
-  return /^[\$£€¥]/.test(s) ? s.charAt(0) : '$'
+  return /^[$£€¥]/.test(s) ? s.charAt(0) : '$'
 }
 
 // Pretty-format a balance for display: "$47.50". Now a thin shim over
@@ -358,7 +358,7 @@ export const haptic = (pattern) => {
   if ('vibrate' in navigator) {
     try {
       navigator.vibrate(pattern)
-    } catch (e) {
+    } catch {
       // swallow — haptics are best-effort
     }
   }

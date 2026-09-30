@@ -106,7 +106,9 @@ export function AuthProvider({ children }) {
           try {
             const { Browser } = await import('@capacitor/browser')
             await Browser.close()
-          } catch {}
+          } catch {
+            /* already closed, or no in-app browser open */
+          }
         })
       } catch {
         /* @capacitor/app unavailable (web) — nothing to listen for */

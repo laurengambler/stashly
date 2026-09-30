@@ -1,0 +1,45 @@
+name: CI
+
+# Every regression this project has shipped was caught by a person on a
+# device, not by tooling: a dead photo button, card numbers in production
+# logs, a parser that fused two fields into one. This runs the checks that
+# would have caught them, on every push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Fails on errors only. The React Compiler findings are warnings on
+      # purpose (see eslint.config.js) and are printed but do not block.
+      - name: Lint
+        run: npm run lint
+
+      # The shared spec for the JS and Swift card parsers.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Card numbers and PINs must never be logged: they were, in four
+      # places, and shipped. This is the check that keeps them out.
+      - name: No card data in logs
+        run: |
+          if grep -rnE "console\.(log|info|warn|error)\(.*\b(payload|cardPayload)\b" src/; then
+            echo "::error::A console call logs a payload object — it may contain card_number or pin. Use logShape() instead."
+            exit 1
+          fi
+          echo "OK: no payload objects passed to console"

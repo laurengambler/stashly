@@ -34,14 +34,7 @@ import { track } from '../lib/posthog.js'
 // Continuing commits a limited-storage card; cancelling returns the
 // user to the form with every field intact so they can correct the
 // number if they entered the wrong one.
-function LimitedStorageModal({ brand, onCancel, onContinue }) {
-  const brandLabel =
-    brand === CARD_BRAND.VISA
-      ? 'Visa'
-      : brand === CARD_BRAND.MASTERCARD
-      ? 'Mastercard'
-      : 'prepaid'
-
+function LimitedStorageModal({ onCancel, onContinue }) {
   return (
     <div
       className="pw-modal-overlay"
@@ -569,7 +562,6 @@ export default function AddCardScreen({ onCancel, onSave, editCard = null }) {
 
       {modal === 'limited' && pendingOpenLoop && (
         <LimitedStorageModal
-          brand={pendingOpenLoop.brand}
           onCancel={cancelLimited}
           onContinue={afterLimitedContinue}
         />

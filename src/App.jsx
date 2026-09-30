@@ -214,7 +214,11 @@ export default function App() {
       setCards((prev) => [...inserted, ...prev])
       try {
         localStorage.removeItem(LEGACY_KEY)
-      } catch {}
+      } catch (err) {
+        // Benign: the migration decision key is still written below, so
+        // the prompt will not reappear and nothing is imported twice.
+        console.warn('Could not clear migrated local cards', err)
+      }
       localStorage.setItem(MIGRATION_DECISION_KEY, 'migrated')
       track('local_cards_migrated', {
         user_id: user.id,
@@ -324,7 +328,10 @@ export default function App() {
         try {
           const fresh = await fetchCards()
           setCards(fresh)
-        } catch {}
+        } catch (refetchErr) {
+          console.warn('Could not refresh cards after failed update', refetchErr)
+          showToast('Out of sync — reopen the app')
+        }
       }
     },
     []
