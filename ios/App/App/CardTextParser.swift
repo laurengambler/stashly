@@ -283,6 +283,44 @@ enum CardTextParser {
     /// merged them into a 20-digit number and lost the PIN.
     static let maxCardDigits = 19
 
+    /// Should two adjacent tap targets become one?
+    ///
+    /// Unlike the string-level re-join, this has GEOMETRY, so it can use the
+    /// signal the text cannot carry: how wide the gap is relative to the
+    /// character size. Measured on real Vision output, gaps inside a grouped
+    /// number run about 0.15-1.3 character widths, while the gap before a
+    /// separate field runs about 7-8. The threshold sits in that gulf.
+    ///
+    /// Also requires the two to be on the same visual line. Without that,
+    /// the last token of one line could merge with the first of the next —
+    /// tokens arrive in Vision's order, which is not spatial.
+    static func mergesAsTapTarget(
+        prevText: String, prevRect: CGRect,
+        text: String, rect: CGRect
+    ) -> Bool {
+        guard mergesAsGroupedNumber(prevText, text) else { return false }
+
+        // Same visual line: vertical extents overlap by more than half the
+        // shorter one, the same test visualLines uses.
+        let overlap = min(prevRect.maxY, rect.maxY) - max(prevRect.minY, rect.minY)
+        let shorter = min(prevRect.height, rect.height)
+        guard shorter > 0, overlap / shorter > 0.5 else { return false }
+
+        // Tight gap, normalized by character width.
+        let gap = rect.minX - prevRect.maxX
+        guard gap >= 0 else { return false }
+        let cwPrev = prevRect.width / CGFloat(max(prevText.count, 1))
+        let cwNext = rect.width / CGFloat(max(text.count, 1))
+        let charWidth = (cwPrev + cwNext) / 2
+        guard charWidth > 0 else { return false }
+        return gap / charWidth <= maxTapMergeGapRatio
+    }
+
+    /// Gaps inside a grouped number measured 0.15-1.3 character widths; the
+    /// gap before a separate field measured ~7.7. 2.5 sits in the gulf with
+    /// room on both sides.
+    static let maxTapMergeGapRatio: CGFloat = 2.5
+
     static func mergesAsGroupedNumber(_ a: String, _ b: String) -> Bool {
         let ga = groupLength(a)
         guard ga > 0, ga == groupLength(b) else { return false }
@@ -291,7 +329,19 @@ enum CardTextParser {
 
     /// Split one visual line into fields at wide gaps, then re-join runs that
     /// are really one grouped number.
+    /// A run of a visual line, and whether it was assembled by joining
+    /// across a gap the recognizer treated as a field boundary.
+    struct Run {
+        let text: String
+        let merged: Bool
+    }
+
+    /// Segment texts only. The shared conformance cases assert this shape.
     static func segmentLine(_ line: String) -> [String] {
+        segmentRuns(line).map(\.text)
+    }
+
+    static func segmentRuns(_ line: String) -> [Run] {
         var raw: [String] = []
         var current = ""
         var run = 0
@@ -312,14 +362,18 @@ enum CardTextParser {
         }
         if !current.isEmpty { raw.append(current) }
 
-        var out: [String] = []
+        var out: [Run] = []
         for seg in raw {
             let trimmed = seg.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
-            if let prev = out.last, mergesAsGroupedNumber(prev, trimmed) {
-                out[out.count - 1] = prev + " " + trimmed
+            if let prev = out.last, mergesAsGroupedNumber(prev.text, trimmed) {
+                // Joined ACROSS a gap the recognizer thought was a field
+                // boundary. Recorded, because a number assembled this way
+                // is a guess about layout and must never be filled in
+                // without being confirmed.
+                out[out.count - 1] = Run(text: prev.text + " " + trimmed, merged: true)
             } else {
-                out.append(trimmed)
+                out.append(Run(text: trimmed, merged: false))
             }
         }
         return out
@@ -346,6 +400,7 @@ enum CardTextParser {
     private struct Segment {
         let text: String
         let digits: String
+        let merged: Bool
         let lineIndex: Int
         let position: Int
     }
@@ -365,8 +420,9 @@ enum CardTextParser {
 
         var segs: [Segment] = []
         for (li, line) in lines.enumerated() {
-            for (pos, text) in segmentLine(line).enumerated() {
-                segs.append(Segment(text: text, digits: digits(text), lineIndex: li, position: pos))
+            for (pos, run) in segmentRuns(line).enumerated() {
+                segs.append(Segment(text: run.text, digits: digits(run.text),
+                                    merged: run.merged, lineIndex: li, position: pos))
             }
         }
 
@@ -434,10 +490,18 @@ enum CardTextParser {
             .map { numberValue($0.text) }
             .filter { !validatedNumber($0).isEmpty }
         let len = digits(out.number).count
+        // A number assembled by joining runs across a gap cannot be trusted
+        // to fill the field, however clean it looks afterwards. Joining is a
+        // guess about layout, and the guess that swallowed a PIN produced a
+        // perfectly plausible 16-digit number. Merged means low means the
+        // user is asked — so a merge bug fails safe instead of autofilling.
+        let mergedNumber = numberSeg?.merged ?? false
         if out.number.isEmpty {
             out.numberConfidence = "low"
         } else if !labeled.isEmpty || !(barcode ?? "").isEmpty {
             out.numberConfidence = "high"
+        } else if mergedNumber {
+            out.numberConfidence = "low"
         } else if competing.count == 1 && len >= 12 && len <= 19 {
             out.numberConfidence = "high"
         } else {

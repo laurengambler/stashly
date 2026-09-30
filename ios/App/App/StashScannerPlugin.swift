@@ -286,8 +286,15 @@ public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
                     // targets, and tapping one hands back a 4-digit
                     // fragment rather than the card number. Merge them
                     // into a single target spanning the whole run.
+                    // Same line AND a tight gap, not just matching group
+                    // lengths. boxes accumulates across observations, which
+                    // arrive in Vision's order rather than spatially, so
+                    // without the line test the last token of one line could
+                    // merge with the first of the next.
                     if let prev = boxes.last,
-                       CardTextParser.mergesAsGroupedNumber(prev.text, text) {
+                       CardTextParser.mergesAsTapTarget(
+                           prevText: prev.text, prevRect: prev.rect,
+                           text: text, rect: box.rect) {
                         boxes[boxes.count - 1] = TextBox(
                             text: prev.text + " " + text,
                             rect: prev.rect.union(box.rect)

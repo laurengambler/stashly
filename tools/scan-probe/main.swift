@@ -92,6 +92,7 @@ func probe(path: String) {
 
     // Tappable tokens, exactly as StashScannerPlugin builds them.
     print("\n  ── tappable boxes ──")
+    var merged: [(String, CGRect)] = []
     for obs in textReq.results ?? [] {
         guard let cand = obs.topCandidates(1).first else { continue }
         let full = cand.string
@@ -107,7 +108,6 @@ func probe(path: String) {
         if let st = start { ranges.append(st..<full.endIndex) }
         // Mirrors the merging in StashScannerPlugin: grouped runs become
         // ONE tap target, not one per group.
-        var merged: [(String, CGRect)] = []
         for r in ranges {
             let t = String(full[r]).trimmingCharacters(in: .whitespaces)
             guard t.contains(where: \.isNumber) else { continue }
@@ -115,16 +115,19 @@ func probe(path: String) {
             let bb = bx.boundingBox
             let rect = CGRect(x: bb.minX, y: 1 - bb.maxY, width: bb.width, height: bb.height)
             if let prev = merged.last,
-               CardTextParser.mergesAsGroupedNumber(prev.0, t) {
+               CardTextParser.mergesAsTapTarget(
+                   prevText: prev.0, prevRect: prev.1, text: t, rect: rect) {
                 merged[merged.count - 1] = (prev.0 + " " + t, prev.1.union(rect))
             } else {
                 merged.append((t, rect))
             }
         }
-        for (t, rect) in merged {
-            print(String(format: "    x=%.3f y=%.3f w=%.3f h=%.3f  %@",
-                         rect.minX, rect.minY, rect.width, rect.height, quoted(t)))
-        }
+    }
+    // Accumulated ACROSS observations, exactly as StashScannerPlugin does,
+    // so the probe cannot hide a cross-observation merge bug again.
+    for (t, rect) in merged {
+        print(String(format: "    x=%.3f y=%.3f w=%.3f h=%.3f  %@",
+                     rect.minX, rect.minY, rect.width, rect.height, quoted(t)))
     }
 
     let parsed = CardTextParser.parseFields(barcode: barcode, lines: lines)

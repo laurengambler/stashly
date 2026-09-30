@@ -140,6 +140,21 @@
         "1234 5678 9012 3456 7890",
         "1234"
       ]
+    },
+    {
+      "name": "a labeled PIN blocks the join (non-numeric token)",
+      "in": "4821 9034 7715   PIN 5567",
+      "out": [
+        "4821 9034 7715",
+        "PIN 5567"
+      ]
+    },
+    {
+      "name": "a bare PIN under the 19 cap still joins \u2014 see the confidence case",
+      "in": "4821 9034 7715   5567",
+      "out": [
+        "4821 9034 7715 5567"
+      ]
     }
   ],
   "detectPin": [
@@ -249,7 +264,7 @@
       }
     },
     {
-      "name": "wide-spaced grouping is still one number",
+      "name": "wide-spaced grouping is one number, but merged so not trusted",
       "lines": [
         "1234  5678  9012  3456"
       ],
@@ -258,7 +273,7 @@
         "number": "1234567890123456",
         "pin": "",
         "numberFromLabel": false,
-        "numberConfidence": "high"
+        "numberConfidence": "low"
       }
     },
     {
@@ -418,6 +433,32 @@
         "pin": "4821",
         "numberFromLabel": false,
         "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "4-4-4 number with a LABELED PIN resolves both",
+      "lines": [
+        "4821 9034 7715   PIN 5567"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "482190347715",
+        "pin": "5567",
+        "numberFromLabel": false,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "4-4-4 number with a BARE PIN merges, so it is never autofilled",
+      "lines": [
+        "4821 9034 7715   5567"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "4821903477155567",
+        "pin": "",
+        "numberFromLabel": false,
+        "numberConfidence": "low"
       }
     }
   ],

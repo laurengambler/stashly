@@ -38,6 +38,11 @@ deterministic, which a photo is not.
 | `grouped.png` | `6011 5000 1234 5678` + `PIN 4821` | One number, single-spaced; labeled PIN below. |
 | `wide-grouped.png` | `1234  5678  9012  3456` | One number printed with wide gaps; must not split into four. |
 | `fineprint-only.png` | no number at all | The number field must stay blank rather than guess. |
+| `barcode-vs-label.png` | `CARD#: …-2274Q` + a real Code 128 barcode | The barcode encodes a UPC plus a serial, not the card number. The label must win. |
+| `decoy-run.png` | a 16-digit number and a 12-digit reference, neither labeled | Two plausible runs. Must resolve LOW confidence and ask, not guess. |
+| `grouped-with-pin.png` | `1234 5678 9012 3456        4821` | 16 + 4 = 20 digits, over the cap. Number and PIN must stay separate. |
+| `triple-group-labeled-pin.png` | `4821 9034 7715        PIN 5567` | 12 + 4 = 16, under the cap — the label is what separates them. Regression guard. |
+| `triple-group-bare-pin.png` | `4821 9034 7715        5567` | Same shape, no label. The join still happens, so the result must be LOW confidence and the PIN must remain its own tap target. |
 
 ## Relationship to the JS tests
 

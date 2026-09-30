@@ -171,3 +171,25 @@ render([
     Line("This card is not redeemable for cash except where", size: 21),
     Line("required by law. Terms and conditions apply.", size: 21),
 ], to: outDir.appendingPathComponent("grouped-with-pin.png"))
+
+// A 4-4-4 number (12 digits) with a 4-digit PIN. 12 + 4 = 16, UNDER the
+// 19-digit cap, so the length rule cannot separate them — this is the case
+// the cap misses. Two variants, because the label is what decides:
+//
+//   labeled   "PIN 4821" contains a non-numeric token, so groupLength is 0
+//             and the join is refused. Safe, and this fixture guards it.
+//   unlabeled nothing distinguishes the PIN from a fifth group of the
+//             number except the WIDTH of the gap before it.
+render([
+    Line("STASH MARKET", size: 40),
+    Line("4821 9034 7715        PIN 5567", size: 32, bold: true),
+    Line("This card is not redeemable for cash except where", size: 21),
+    Line("required by law. Terms and conditions apply.", size: 21),
+], to: outDir.appendingPathComponent("triple-group-labeled-pin.png"))
+
+render([
+    Line("STASH MARKET", size: 40),
+    Line("4821 9034 7715        5567", size: 32, bold: true),
+    Line("This card is not redeemable for cash except where", size: 21),
+    Line("required by law. Terms and conditions apply.", size: 21),
+], to: outDir.appendingPathComponent("triple-group-bare-pin.png"))

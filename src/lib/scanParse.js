@@ -131,7 +131,7 @@ const canJoin = (a, b) =>
  * Split one visual line into fields at wide gaps, then re-join runs that
  * are really one grouped number.
  */
-export const segmentLine = (line) => {
+export const segmentRuns = (line) => {
   const raw = String(line || '')
     .split(WIDE_GAP)
     .map((s) => s.trim())
@@ -141,14 +141,20 @@ export const segmentLine = (line) => {
   for (const seg of raw) {
     const g = groupLength(seg)
     const prev = out[out.length - 1]
-    if (g && prev && groupLength(prev) === g && canJoin(prev, seg)) {
-      out[out.length - 1] = `${prev} ${seg}`
+    if (g && prev && groupLength(prev.text) === g && canJoin(prev.text, seg)) {
+      // Joined ACROSS a gap the recognizer thought was a field boundary.
+      // Recorded, because a number assembled this way is a guess about
+      // layout and must never be filled in without being confirmed.
+      out[out.length - 1] = { text: `${prev.text} ${seg}`, merged: true }
     } else {
-      out.push(seg)
+      out.push({ text: seg, merged: false })
     }
   }
   return out
 }
+
+/** Segment texts only. The shared conformance cases assert this shape. */
+export const segmentLine = (line) => segmentRuns(line).map((r) => r.text)
 
 /**
  * Find a clearly labeled PIN in recognized text.
@@ -224,8 +230,14 @@ export const parseCardFields = (textLines = [], barcode = '') => {
   // same line", which is what makes the trailing run a PIN.
   const segs = []
   lines.forEach((line, lineIndex) => {
-    segmentLine(line).forEach((text, pos) => {
-      segs.push({ text, digits: digitsOnly(text), lineIndex, pos })
+    segmentRuns(line).forEach((run, pos) => {
+      segs.push({
+        text: run.text,
+        digits: digitsOnly(run.text),
+        merged: run.merged,
+        lineIndex,
+        pos,
+      })
     })
   })
 
@@ -296,9 +308,16 @@ export const parseCardFields = (textLines = [], barcode = '') => {
     .map((sg) => numberValue(sg.text))
     .filter((v) => !!validatedNumber(v))
   const len = digitsOnly(number).length
+  // A number assembled by joining runs across a gap cannot be trusted to
+  // fill the field, however clean it looks afterwards. Joining is a guess
+  // about layout, and the guess that swallowed a PIN produced a perfectly
+  // plausible 16-digit number. Merged means low means the user is asked —
+  // so a merge bug fails safe instead of autofilling something wrong.
+  const mergedNumber = !!(numberSeg && numberSeg.merged)
   let numberConfidence = 'low'
   if (!number) numberConfidence = 'low'
   else if (labeled || barcode) numberConfidence = 'high'
+  else if (mergedNumber) numberConfidence = 'low'
   else if (competing.length === 1 && len >= 12 && len <= 19) numberConfidence = 'high'
   numberFromLabel = !!labeled
 
