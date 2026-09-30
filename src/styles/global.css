@@ -2213,6 +2213,25 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   box-shadow: 0 0 0 10px transparent;
 }
 .pw-tapselect-box:active { background: rgba(178, 243, 50, 0.55); }
+/* A refused tap. Silence here reads as an unresponsive button, which is
+   the same failure as the dead photo button in miniature — so the box
+   shakes and the prompt says why. */
+@keyframes pw-tapselect-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+.pw-tapselect-box.rejected {
+  background: rgba(187, 51, 51, 0.28);
+  border-color: #B33;
+  animation: pw-tapselect-shake 0.4s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pw-tapselect-box.rejected { animation: none; }
+}
+.pw-tapselect-warn { color: #B33; }
 .pw-tapselect-box.picked {
   background: rgba(178, 243, 50, 0.7);
   border-color: var(--ink);

@@ -276,9 +276,17 @@ enum CardTextParser {
     /// Do two adjacent runs read as one grouped number ("8842" + "6100")?
     /// Used to merge tap targets: a number printed in groups must be ONE
     /// target, not four, or tapping it yields a 4-digit fragment.
+    /// The longest card number in use is 19 digits (ISO/IEC 7812). Joining
+    /// two runs into something longer is not recovering a grouped number —
+    /// it is gluing two fields together. A 4-4-4-4 number followed by a
+    /// 4-digit PIN is all four-digit runs, so the equal-groups rule alone
+    /// merged them into a 20-digit number and lost the PIN.
+    static let maxCardDigits = 19
+
     static func mergesAsGroupedNumber(_ a: String, _ b: String) -> Bool {
         let ga = groupLength(a)
-        return ga > 0 && ga == groupLength(b)
+        guard ga > 0, ga == groupLength(b) else { return false }
+        return digits(a).count + digits(b).count <= maxCardDigits
     }
 
     /// Split one visual line into fields at wide gaps, then re-join runs that
@@ -308,8 +316,7 @@ enum CardTextParser {
         for seg in raw {
             let trimmed = seg.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
-            let g = groupLength(trimmed)
-            if g > 0, let prev = out.last, groupLength(prev) == g {
+            if let prev = out.last, mergesAsGroupedNumber(prev, trimmed) {
                 out[out.count - 1] = prev + " " + trimmed
             } else {
                 out.append(trimmed)

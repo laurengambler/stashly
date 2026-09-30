@@ -28,17 +28,27 @@ export default function TapToSelect({
   // 'number' -> 'pin' -> null (done/dismissed)
   const [asking, setAsking] = useState('number')
   const [picked, setPicked] = useState({})
+  // Index of a box whose tap was refused, so it can shake and say why.
+  // Staying silent on a refusal reads as an unresponsive button — the same
+  // failure as the dead photo button, in miniature.
+  const [rejected, setRejected] = useState(null)
 
   if (!photoUrl || !boxes.length || !asking) return null
 
-  const handleTap = (box) => {
+  const handleTap = (box, index) => {
     // onPick returns false when the tapped run did not pass validation —
     // a tap can land on fine print, and the number field takes a validated
-    // run or nothing. Stay on the same prompt rather than advancing as if
-    // it worked.
+    // run or nothing.
     const accepted = onPick?.(asking, box.text) !== false
-    if (!accepted) return
+    if (!accepted) {
+      // Shake the box and say why, then clear so a second tap re-triggers
+      // the animation rather than doing nothing visible.
+      setRejected(index)
+      setTimeout(() => setRejected((r) => (r === index ? null : r)), 900)
+      return
+    }
 
+    setRejected(null)
     setPicked((p) => ({ ...p, [asking]: box.text }))
     if (asking === 'number' && askPin) setAsking('pin')
     else finish()
@@ -52,8 +62,12 @@ export default function TapToSelect({
   return (
     <div className="pw-tapselect">
       <div className="pw-tapselect-prompt">
-        <span>
-          {asking === 'number'
+        <span className={rejected !== null ? 'pw-tapselect-warn' : undefined}>
+          {rejected !== null
+            ? asking === 'number'
+              ? "That doesn't look like a card number — try another"
+              : "That doesn't look like a PIN — try another"
+            : asking === 'number'
             ? 'Tap the card number on the photo'
             : 'Now tap the PIN, if the card has one'}
         </span>
@@ -70,14 +84,18 @@ export default function TapToSelect({
             <button
               key={`${b.text}-${i}`}
               type="button"
-              className={`pw-tapselect-box${isPicked ? ' picked' : ''}`}
+              className={
+                'pw-tapselect-box' +
+                (isPicked ? ' picked' : '') +
+                (rejected === i ? ' rejected' : '')
+              }
               style={{
                 left: `${b.x * 100}%`,
                 top: `${b.y * 100}%`,
                 width: `${b.w * 100}%`,
                 height: `${b.h * 100}%`,
               }}
-              onClick={() => handleTap(b)}
+              onClick={() => handleTap(b, i)}
               aria-label={`Use ${b.text} as the ${asking === 'number' ? 'card number' : 'PIN'}`}
             />
           )

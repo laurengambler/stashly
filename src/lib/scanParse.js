@@ -114,6 +114,19 @@ const groupLength = (s) => {
   return parts.every((p) => p.length === n) ? n : 0
 }
 
+// The longest card number in use is 19 digits (ISO/IEC 7812). Re-joining
+// two runs into something longer than that is not recovering a grouped
+// number — it is gluing two different fields together.
+//
+// This is what a 4-4-4-4 number followed by a 4-digit PIN looks like:
+// every run is four digits, so the equal-groups rule alone happily merged
+// "1234 5678 9012 3456" with "4821" into a 20-digit number and the PIN
+// disappeared entirely. The length cap is the thing that tells them apart,
+// because the gap width cannot: a card prints its own groups with gaps too.
+const MAX_CARD_DIGITS = 19
+const canJoin = (a, b) =>
+  digitsOnly(a).length + digitsOnly(b).length <= MAX_CARD_DIGITS
+
 /**
  * Split one visual line into fields at wide gaps, then re-join runs that
  * are really one grouped number.
@@ -128,7 +141,7 @@ export const segmentLine = (line) => {
   for (const seg of raw) {
     const g = groupLength(seg)
     const prev = out[out.length - 1]
-    if (g && prev && groupLength(prev) === g) {
+    if (g && prev && groupLength(prev) === g && canJoin(prev, seg)) {
       out[out.length - 1] = `${prev} ${seg}`
     } else {
       out.push(seg)

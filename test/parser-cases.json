@@ -124,6 +124,22 @@
       "out": [
         "6011 5000 1234 5678"
       ]
+    },
+    {
+      "name": "4-4-4-4 number plus a 4-digit PIN stays two runs",
+      "in": "1234 5678 9012 3456        4821",
+      "out": [
+        "1234 5678 9012 3456",
+        "4821"
+      ]
+    },
+    {
+      "name": "joining never exceeds 19 digits",
+      "in": "1234 5678 9012 3456 7890  1234",
+      "out": [
+        "1234 5678 9012 3456 7890",
+        "1234"
+      ]
     }
   ],
   "detectPin": [
@@ -389,6 +405,19 @@
         "pin": "",
         "numberFromLabel": false,
         "numberConfidence": "low"
+      }
+    },
+    {
+      "name": "a 4-digit PIN beside a 4-4-4-4 number is not swallowed",
+      "lines": [
+        "1234 5678 9012 3456        4821"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "1234567890123456",
+        "pin": "4821",
+        "numberFromLabel": false,
+        "numberConfidence": "high"
       }
     }
   ],

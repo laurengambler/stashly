@@ -159,3 +159,15 @@ render([
     Line("This card is not redeemable for cash except where", size: 21),
     Line("required by law. Terms and conditions apply.", size: 21),
 ], to: outDir.appendingPathComponent("decoy-run.png"))
+
+// A 4-4-4-4 number with a bare 4-digit PIN on the SAME line. Every run is
+// four digits, so the equal-groups re-join rule merged all five into one
+// 20-digit number and the PIN vanished. The gap width cannot tell them
+// apart — a card prints its own groups with gaps too — so the length cap
+// is what separates them. This fixture is that case.
+render([
+    Line("STASH MARKET", size: 40),
+    Line("1234 5678 9012 3456        4821", size: 32, bold: true),
+    Line("This card is not redeemable for cash except where", size: 21),
+    Line("required by law. Terms and conditions apply.", size: 21),
+], to: outDir.appendingPathComponent("grouped-with-pin.png"))
