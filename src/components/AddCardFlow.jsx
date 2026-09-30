@@ -50,7 +50,7 @@ export default function AddCardFlow({ onCancel, onSave, onToast }) {
         // the card can still be typed in, and the toast says why it is empty
         // rather than leaving the user to guess.
         track('capture_failed', { method: m, reason: 'no_fields_found' })
-        toast("Couldn't read that card — add the details below")
+        toast("Couldn't read that card. Add the details below.")
       }
       setScan(result || {})
       setMethod(m)
@@ -79,7 +79,7 @@ export default function AddCardFlow({ onCancel, onSave, onToast }) {
         reason: info.reason,
         error_message: info.detail,
       })
-      toast("Couldn't read that card — add the details below")
+      toast("Couldn't read that card. Add the details below.")
       setScan({})
       setMethod(m)
       setStep('confirm')
