@@ -37,10 +37,27 @@ struct PositionedText {
     let rect: CGRect
 }
 
+/// One tappable run of recognized text, with where it sits on the card.
+/// Normalized to a top-left origin in 0...1 of the image, so the JS overlay
+/// can place it over the photo without knowing the image size.
+struct TextBox {
+    let text: String
+    let rect: CGRect
+
+    var asDictionary: [String: Any] {
+        ["text": text, "x": rect.minX, "y": rect.minY, "w": rect.width, "h": rect.height]
+    }
+}
+
 /// Everything a scan resolved.
 struct ScanFields {
     var number = ""
     var pin = ""
+    /// "high" — safe to fill the field for the user.
+    /// "low"  — show the card and let them point at the number instead.
+    var numberConfidence = "low"
+    /// Tappable runs, for the low-confidence path.
+    var textBoxes: [TextBox] = []
     var barcode = ""
     var barcodeFormat = ""
     var merchantGuess = ""
@@ -57,6 +74,8 @@ struct ScanFields {
         if !barcode.isEmpty { r["barcode"] = barcode }
         if !barcodeFormat.isEmpty { r["barcodeFormat"] = barcodeFormat }
         if !merchantGuess.isEmpty { r["merchantGuess"] = merchantGuess }
+        r["numberConfidence"] = numberConfidence
+        if !textBoxes.isEmpty { r["textBoxes"] = textBoxes.map(\.asDictionary) }
         if let b64 = imageBase64 { r["imageBase64"] = b64 }
         return r
     }
@@ -297,6 +316,14 @@ enum CardTextParser {
         var number = ""
         var pin = ""
         var numberFromLabel = false
+        /// Whether we are sure enough to fill the field without being asked.
+        /// "high" only when the card told us outright (a label or a barcode
+        /// payload), or when exactly one run on the whole card could be a
+        /// card number and it is a normal length. Anything else is "low":
+        /// several plausible runs, an odd length, or a value assembled from
+        /// a guess. A wrong number typed into the field costs the user more
+        /// than being asked to point at the right one.
+        var numberConfidence = "low"
         /// What the number would have been before the guard, for logging.
         var rejectedNumber = ""
     }
@@ -378,6 +405,29 @@ enum CardTextParser {
         out.numberFromLabel = !labeled.isEmpty
         out.number = validatedNumber(candidate)
         if out.number.isEmpty && !candidate.isEmpty { out.rejectedNumber = candidate }
+
+        // How sure are we? Only two answers, because the UI only has two
+        // behaviours: fill the field, or show the card and ask.
+        //
+        // High means the card said so — it labeled the number, or a barcode
+        // decoded exactly. Failing that, high also covers the unambiguous
+        // case: exactly ONE run on the whole card could be a card number,
+        // and it is a normal card length. As soon as there are competing
+        // runs we are guessing which is the number, and guessing wrong is
+        // worse for the user than being asked to point at it.
+        let competing = segs
+            .map { numberValue($0.text) }
+            .filter { !validatedNumber($0).isEmpty }
+        let len = digits(out.number).count
+        if out.number.isEmpty {
+            out.numberConfidence = "low"
+        } else if !labeled.isEmpty || !(barcode ?? "").isEmpty {
+            out.numberConfidence = "high"
+        } else if competing.count == 1 && len >= 12 && len <= 19 {
+            out.numberConfidence = "high"
+        } else {
+            out.numberConfidence = "low"
+        }
 
         out.pin = pinLabeled
         if out.pin.isEmpty, let seg = numberSeg {

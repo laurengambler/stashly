@@ -105,6 +105,24 @@ enum ScanLog {
     }
 }
 
+/// Ranges of the whitespace-separated tokens in a string, so each can be
+/// asked for its own bounding box.
+private func tokenRanges(in s: String) -> [Range<String.Index>] {
+    var out: [Range<String.Index>] = []
+    var start: String.Index?
+    var i = s.startIndex
+    while i < s.endIndex {
+        if s[i].isWhitespace {
+            if let st = start { out.append(st..<i); start = nil }
+        } else if start == nil {
+            start = i
+        }
+        i = s.index(after: i)
+    }
+    if let st = start { out.append(st..<s.endIndex) }
+    return out
+}
+
 @objc(StashScannerPlugin)
 public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "StashScannerPlugin"
@@ -242,12 +260,38 @@ public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
                 )
             }
 
+            // Tappable runs, for when confidence is low and we show the card
+            // and ask the user to point at the number. One box per
+            // whitespace-separated token rather than per observation, so a
+            // line reading "CARD#: 1234-5678  PIN: 4821" offers the number
+            // and the PIN as separate targets. Vision gives sub-ranges their
+            // own box via boundingBox(for:), which is what makes that
+            // possible. Tokens with no digit are labels and are skipped.
+            var boxes: [TextBox] = []
+            for obs in textReq.results ?? [] {
+                guard let candidate = obs.topCandidates(1).first else { continue }
+                let full = candidate.string
+                for token in tokenRanges(in: full) {
+                    let text = String(full[token]).trimmingCharacters(in: .whitespaces)
+                    guard text.contains(where: \.isNumber) else { continue }
+                    guard let rect = try? candidate.boundingBox(for: token) else { continue }
+                    let bb = rect.boundingBox
+                    boxes.append(TextBox(
+                        text: text,
+                        rect: CGRect(x: bb.minX, y: 1 - bb.maxY, width: bb.width, height: bb.height)
+                    ))
+                }
+            }
+
             let lines = CardTextParser.visualLines(from: positioned)
             let parsed = CardTextParser.parseFields(barcode: barcode, lines: lines)
             ScanLog.dump(context: context, lines: lines, parsed: parsed, barcode: barcode)
+            ScanLog.line("\(context): confidence=\(parsed.numberConfidence) tappable boxes=\(boxes.count)")
 
             var fields = ScanFields()
             fields.textLines = lines
+            fields.numberConfidence = parsed.numberConfidence
+            fields.textBoxes = boxes
             fields.barcode = barcode
             fields.barcodeFormat = barcodeFormat
             fields.number = parsed.number

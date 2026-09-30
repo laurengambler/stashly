@@ -200,7 +200,7 @@ export const detectPin = (textLines = [], excludeNumber = '') => {
  *   1. a labeled PIN
  *   2. a separate, shorter run sitting after the number on the same line
  *
- * Returns { number, pin, numberFromLabel }.
+ * Returns { number, pin, numberFromLabel, rejectedNumber, numberConfidence }.
  */
 export const parseCardFields = (textLines = [], barcode = '') => {
   const lines = (textLines || [])
@@ -269,6 +269,24 @@ export const parseCardFields = (textLines = [], barcode = '') => {
 
   const number = validatedNumber(candidate)
   const rejectedNumber = !number && candidate ? candidate : ''
+
+  // How sure are we? Only two answers, because the UI only has two
+  // behaviours: fill the field, or show the card and ask.
+  //
+  // High means the card said so — it labeled the number, or a barcode
+  // decoded exactly. Failing that, high also covers the unambiguous case:
+  // exactly ONE run on the whole card could be a card number, and it is a
+  // normal card length. As soon as there are competing runs we are guessing
+  // which one is the number, and guessing wrong costs the user more than
+  // being asked to point at it.
+  const competing = segs
+    .map((sg) => numberValue(sg.text))
+    .filter((v) => !!validatedNumber(v))
+  const len = digitsOnly(number).length
+  let numberConfidence = 'low'
+  if (!number) numberConfidence = 'low'
+  else if (labeled || barcode) numberConfidence = 'high'
+  else if (competing.length === 1 && len >= 12 && len <= 19) numberConfidence = 'high'
   numberFromLabel = !!labeled
 
   let pin = pinLabeled
@@ -289,5 +307,5 @@ export const parseCardFields = (textLines = [], barcode = '') => {
 
   if (pin && number && digitsOnly(pin) === digitsOnly(number)) pin = ''
 
-  return { number, pin, numberFromLabel, rejectedNumber }
+  return { number, pin, numberFromLabel, rejectedNumber, numberConfidence }
 }

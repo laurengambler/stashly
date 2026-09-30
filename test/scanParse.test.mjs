@@ -366,3 +366,43 @@ test('unmatched merchant names normalize to one ranking key', () => {
     normalizeMerchantName('DUTCHIES COFFEE')
   )
 })
+
+// ---------------------------------------------------------------------
+// Confidence gating. "high" fills the field for the user; "low" shows the
+// card and asks them to point at the number. Mirrored in
+// CardTextParser.parseFields — change both together.
+// ---------------------------------------------------------------------
+
+test('the card telling us outright is high confidence', () => {
+  assert.equal(parseCardFields(['CARD#: 41230-8856-2274Q']).numberConfidence, 'high')
+  assert.equal(parseCardFields(['1234567890123456'], 'AB12345678901234').numberConfidence, 'high')
+})
+
+test('a single unambiguous run is high confidence', () => {
+  assert.equal(parseCardFields(['6011 5000 1234 5678']).numberConfidence, 'high')
+})
+
+test('competing runs are low confidence', () => {
+  // Two things on the card could be the number. Filling one in is a coin
+  // flip the user then has to notice and undo.
+  const r = parseCardFields(['6011500012345678', '4111111111111111'])
+  assert.equal(r.numberConfidence, 'low')
+  assert.ok(r.number, 'still resolves a best guess for the tap UI to pre-highlight')
+})
+
+test('an odd-length run is low confidence', () => {
+  assert.equal(parseCardFields(['123456789']).numberConfidence, 'low')
+})
+
+test('no number at all is low confidence', () => {
+  const r = parseCardFields(['Terms and conditions apply'])
+  assert.equal(r.number, '')
+  assert.equal(r.numberConfidence, 'low')
+})
+
+test('a label still beats a barcode, and stays high confidence', () => {
+  // The precedence fix from the cinema card holds under confidence gating.
+  const r = parseCardFields(['CARD#: 41230-8856-2274Q'], '012345678905000000411223')
+  assert.equal(r.number, '4123088562274Q')
+  assert.equal(r.numberConfidence, 'high')
+})

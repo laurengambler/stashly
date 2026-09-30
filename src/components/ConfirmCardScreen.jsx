@@ -30,6 +30,7 @@ import {
 } from '../lib/helpers.js'
 import { matchMerchant, normalizeMerchantName } from '../lib/merchants.js'
 import { parseCardFields, validatedNumber } from '../lib/scanParse.js'
+import TapToSelect from './TapToSelect.jsx'
 import { savePhoto, newPhotoId } from '../lib/photoStorage.js'
 import { track } from '../lib/posthog.js'
 
@@ -86,9 +87,19 @@ export default function ConfirmCardScreen({
   // native side already applies it, and it is applied again here because
   // this is the field itself — nothing should be able to route around it.
   // What the user types afterwards is theirs and is not filtered.
-  const [number, setNumber] = useState(
-    () => validatedNumber(scan?.number) || parsed.number
-  )
+  //
+  // CONFIDENCE GATING. A scanned number is only filled in when we are sure:
+  // the card labeled it, a barcode decoded it, or exactly one run on the
+  // card could be a number. Otherwise the field stays empty and the card is
+  // shown with its recognized runs boxed, so the user points at the right
+  // one instead of correcting a guess.
+  const confidence = scan?.numberConfidence || parsed.numberConfidence || 'low'
+  const scannedNumber = validatedNumber(scan?.number) || parsed.number
+  const autofilled = !!scannedNumber && confidence === 'high'
+
+  const [number, setNumber] = useState(autofilled ? scannedNumber : '')
+  // The picker replaces the static photo until it is used or dismissed.
+  const [pickerDone, setPickerDone] = useState(false)
   const scannedPin = scan?.pin || parsed.pin
   const [pin, setPin] = useState(scannedPin)
 
@@ -97,7 +108,7 @@ export default function ConfirmCardScreen({
   // the honest measure of whether the scanner is actually helping. Booleans
   // only; no field values ever leave the device.
   const prefill = useRef({
-    number: validatedNumber(scan?.number) || parsed.number,
+    number: autofilled ? scannedNumber : '',
     pin: scannedPin,
     merchant: scanMatch?.name || '',
   })
@@ -132,8 +143,40 @@ export default function ConfirmCardScreen({
     }
   }, [scan])
 
+  // Fired once, when a scan actually filled the number in for the user.
+  // Paired with ocr_tap_selected it says how often the scanner is confident
+  // enough to help versus how often it has to ask.
+  const autofillLogged = useRef(false)
+  useEffect(() => {
+    if (autofillLogged.current || !autofilled) return
+    autofillLogged.current = true
+    track('ocr_autofilled', {
+      field: 'number',
+      confidence,
+      from_label: !!parsed.numberFromLabel,
+      from_barcode: !!scan?.barcode,
+      pin_prefilled: !!scannedPin,
+    })
+  }, [autofilled, confidence, parsed.numberFromLabel, scan?.barcode, scannedPin])
+
+  const showPicker =
+    !autofilled &&
+    !pickerDone &&
+    !!photoUrl &&
+    (scan?.textBoxes || []).length > 0
+
   const classification = useMemo(() => classifyCardNumber(number), [number])
   const canSave = merchant.trim().length > 0
+
+  const handleTapPick = (field, value) => {
+    track('ocr_tap_selected', { field })
+    if (field === 'number') {
+      setNumber(validatedNumber(value) || value)
+    } else {
+      setPin(value)
+      setShowPin(true)
+    }
+  }
 
   const commit = async ({ addAnother }) => {
     if (!canSave || saving) return
@@ -236,6 +279,20 @@ export default function ConfirmCardScreen({
       const edited = (before, after) =>
         !!before && before.trim() !== (after || '').trim()
 
+      // One event per scanned field the user had to correct. This is the
+      // direct measure of scan accuracy: every one of these is a value the
+      // scanner got wrong. (card_added carries the same information as
+      // edited_* booleans; this fires separately so accuracy can be tracked
+      // per field without unpacking the add event.)
+      const editedFields = {
+        number: edited(prefill.current.number, number),
+        pin: edited(prefill.current.pin, pin),
+        merchant: edited(prefill.current.merchant, merchant),
+      }
+      for (const [field, changed] of Object.entries(editedFields)) {
+        if (changed) track('scanned_value_edited', { field, confidence })
+      }
+
       await onSave(payload, {
         addAnother,
         fields: {
@@ -282,6 +339,15 @@ export default function ConfirmCardScreen({
       </div>
 
       <div className="pw-confirm-body">
+        {showPicker ? (
+          <TapToSelect
+            photoUrl={photoUrl}
+            boxes={scan.textBoxes}
+            onPick={handleTapPick}
+            onDismiss={() => setPickerDone(true)}
+            askPin={!scannedPin}
+          />
+        ) : (
         <div className="pw-confirm-photo">
           {photoUrl ? (
             <img src={photoUrl} alt="Captured card" />
@@ -294,6 +360,7 @@ export default function ConfirmCardScreen({
             </div>
           )}
         </div>
+        )}
 
         <div className="pw-field pw-confirm-field">
           <label>Merchant</label>
@@ -315,14 +382,16 @@ export default function ConfirmCardScreen({
               inputMode="text"
               value={number}
               onChange={(e) => setNumber(e.target.value)}
-              placeholder="Scanned automatically"
+              placeholder="Tap the number on the photo, or type it"
               autoComplete="off"
               autoCapitalize="characters"
               autoCorrect="off"
               spellCheck={false}
             />
             <p className="pw-field-hint">
-              Shown exactly as it reads on the card — check it before saving.
+              {autofilled
+                ? 'Found this, look right? Shown exactly as it reads on the card.'
+                : 'Shown exactly as it reads on the card — check it before saving.'}
             </p>
           </div>
         ) : (

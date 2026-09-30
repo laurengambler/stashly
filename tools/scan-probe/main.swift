@@ -90,6 +90,31 @@ func probe(path: String) {
         }
     }
 
+    // Tappable tokens, exactly as StashScannerPlugin builds them.
+    print("\n  ── tappable boxes ──")
+    for obs in textReq.results ?? [] {
+        guard let cand = obs.topCandidates(1).first else { continue }
+        let full = cand.string
+        var start: String.Index? = nil
+        var ranges: [Range<String.Index>] = []
+        var i = full.startIndex
+        while i < full.endIndex {
+            if full[i].isWhitespace {
+                if let st = start { ranges.append(st..<i); start = nil }
+            } else if start == nil { start = i }
+            i = full.index(after: i)
+        }
+        if let st = start { ranges.append(st..<full.endIndex) }
+        for r in ranges {
+            let t = String(full[r]).trimmingCharacters(in: .whitespaces)
+            guard t.contains(where: \.isNumber) else { continue }
+            guard let bx = try? cand.boundingBox(for: r) else { continue }
+            let bb = bx.boundingBox
+            print(String(format: "    x=%.3f y=%.3f w=%.3f h=%.3f  %@",
+                         bb.minX, 1 - bb.maxY, bb.width, bb.height, quoted(t)))
+        }
+    }
+
     let parsed = CardTextParser.parseFields(barcode: barcode, lines: lines)
     print("\n  ── resolved ──")
     print("    barcode: \(barcode.isEmpty ? "(none)" : quoted(barcode))")
@@ -98,6 +123,7 @@ func probe(path: String) {
         print("    number REJECTED by guard: \(quoted(parsed.rejectedNumber))")
     }
     print("    pin:     \(parsed.pin.isEmpty ? "(none)" : parsed.pin)")
+    print("    confidence: \(parsed.numberConfidence)")
     print("    merchantGuess: \(quoted(CardTextParser.merchantGuess(from: lines)))")
 }
 

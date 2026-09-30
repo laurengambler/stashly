@@ -2184,6 +2184,40 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .pw-field-hint {
   margin: 6px 0 0; font-size: 12px; line-height: 1.35; color: var(--ink-60);
 }
+
+/* Tap-to-select: the low-confidence path. The card photo with every
+   recognized run boxed, so the user points at the number instead of
+   correcting a guess. Boxes are positioned in percentages because the
+   coordinates arrive normalized to the image. */
+.pw-tapselect { display: flex; flex-direction: column; gap: 8px; }
+.pw-tapselect-prompt {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-size: 14px; font-weight: 600; color: var(--ink);
+}
+.pw-tapselect-skip {
+  font-size: 14px; font-weight: 500; color: var(--ink-60);
+  padding: 6px 10px; min-height: 36px;
+}
+.pw-tapselect-photo {
+  position: relative; width: 100%; border-radius: 16px; overflow: hidden;
+  background: #EDE6DA; line-height: 0;
+}
+.pw-tapselect-photo img { width: 100%; height: auto; display: block; }
+.pw-tapselect-box {
+  position: absolute; padding: 0; min-height: 0;
+  background: rgba(178, 243, 50, 0.28);
+  border: 2px solid var(--lime);
+  border-radius: 4px;
+  /* Small runs on a card photo can be a few pixels tall; keep the tap
+     target usable without moving the box off the text it marks. */
+  box-shadow: 0 0 0 10px transparent;
+}
+.pw-tapselect-box:active { background: rgba(178, 243, 50, 0.55); }
+.pw-tapselect-box.picked {
+  background: rgba(178, 243, 50, 0.7);
+  border-color: var(--ink);
+}
+
 /* Capture-screen failure notice. The capture body is centred, so the
    inherited left padding would read as off-centre here. */
 .pw-capture-error {
