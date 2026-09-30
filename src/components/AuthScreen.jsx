@@ -16,6 +16,19 @@ import { friendlyAuthError } from '../lib/authErrors.js'
 // Supabase returns one generic "invalid credentials" for both an unknown
 // email and a wrong password (anti-enumeration), so login_failed still
 // can't split those two — we tag what we can for the funnel.
+// Supabase auth messages are human-readable and can echo back what the
+// user typed, including their email address. Events carry a CODE only —
+// enough to segment the funnel, nothing that identifies a person.
+const signupFailureReason = (error) => {
+  const code = error?.code
+  const msg = (error?.message || '').toLowerCase()
+  if (code === 'user_already_exists' || msg.includes('already registered')) return 'already_registered'
+  if (code === 'weak_password' || msg.includes('password')) return 'weak_password'
+  if (code === 'validation_failed' || msg.includes('invalid email')) return 'invalid_email'
+  if (error?.status === 429 || msg.includes('rate limit')) return 'rate_limited'
+  return 'unknown'
+}
+
 const loginFailureReason = (error) => {
   const code = error?.code
   const msg = (error?.message || '').toLowerCase()
@@ -69,7 +82,10 @@ export default function AuthScreen() {
         const { data, error } = await signUp(email.trim(), password)
         if (error) {
           setError(friendlyAuthError(error, 'signup'))
-          track('signup_failed', { error_message: error.message })
+          track('signup_failed', {
+            reason: signupFailureReason(error),
+            status: error?.status ?? null,
+          })
         } else if (data?.user && !data.session) {
           setInfo('Almost there — tap the link in the email we just sent to finish setting up.')
           setMode('signin')
@@ -79,7 +95,10 @@ export default function AuthScreen() {
         const { error } = await signIn(email.trim(), password)
         if (error) {
           setError(friendlyAuthError(error, 'signin'))
-          track('login_failed', { error_message: error.message, reason: loginFailureReason(error) })
+          track('login_failed', {
+            reason: loginFailureReason(error),
+            status: error?.status ?? null,
+          })
         }
       }
     } finally {

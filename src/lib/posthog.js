@@ -26,6 +26,12 @@ export const initPostHog = () => {
     capture_pageview: true,
     persistence: 'localStorage',
     autocapture: false,
+    // Session replay is OFF from the client, not just unconfigured in the
+    // project. Replay masks input fields by default but NOT images, and
+    // the confirm screen shows a photo of the card — number, PIN and all.
+    // Leaving this to a project-level setting means one toggle in a
+    // dashboard, by anyone, starts recording card photos. Say no here.
+    disable_session_recording: true,
     enableExceptionAutocapture: true,
   })
   _ready = true
