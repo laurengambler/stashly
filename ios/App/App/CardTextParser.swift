@@ -112,13 +112,14 @@ enum CardTextParser {
     /// the same height, order them left to right, and preserve a wide
     /// horizontal gap as a gap in the string so segmentLine can see it.
     ///
-    /// Only ever called on a full-frame still, where the card fills the
-    /// frame and `gapThreshold` therefore means a consistent fraction of the
-    /// card. Running this over a live viewfinder — where the card is some
-    /// unknown fraction of the screen — made the same threshold mean
-    /// different things frame to frame, which is why live capture and photo
-    /// upload used to disagree about the very same card.
-    static func visualLines(from items: [PositionedText], gapThreshold: CGFloat = 0.035) -> [String] {
+    /// Gaps are measured in CHARACTER WIDTHS, not as a fraction of the
+    /// image. A fraction of the image is distance-dependent: the same card
+    /// held closer produces bigger gaps, and the old 0.035 sat within a hair
+    /// of a real intra-number gap measured at 0.034 — so the same card could
+    /// split differently depending on how far away the phone was. Character
+    /// width scales with the text itself, so the ratio holds at any distance.
+    static func visualLines(from items: [PositionedText],
+                            maxGapRatio: CGFloat = maxIntraNumberGapRatio) -> [String] {
         let clean = items.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         guard !clean.isEmpty else { return [] }
 
@@ -138,9 +139,16 @@ enum CardTextParser {
             let ordered = group.sorted { $0.rect.minX < $1.rect.minX }
             var line = ordered[0].text.trimmingCharacters(in: .whitespaces)
             for i in 1..<ordered.count {
-                let gap = ordered[i].rect.minX - ordered[i - 1].rect.maxX
-                line += (gap > gapThreshold ? "   " : " ")
-                line += ordered[i].text.trimmingCharacters(in: .whitespaces)
+                let prev = ordered[i - 1], next = ordered[i]
+                let gap = next.rect.minX - prev.rect.maxX
+                let cwPrev = prev.rect.width / CGFloat(max(prev.text.count, 1))
+                let cwNext = next.rect.width / CGFloat(max(next.text.count, 1))
+                let charWidth = (cwPrev + cwNext) / 2
+                let ratio = charWidth > 0 ? gap / charWidth : 0
+                // Wider than a couple of characters is a field boundary;
+                // anything tighter is ordinary spacing inside one field.
+                line += (ratio > maxGapRatio ? "   " : " ")
+                line += next.text.trimmingCharacters(in: .whitespaces)
             }
             return line
         }
@@ -313,13 +321,24 @@ enum CardTextParser {
         let cwNext = rect.width / CGFloat(max(text.count, 1))
         let charWidth = (cwPrev + cwNext) / 2
         guard charWidth > 0 else { return false }
-        return gap / charWidth <= maxTapMergeGapRatio
+        return gap / charWidth <= maxIntraNumberGapRatio
     }
 
-    /// Gaps inside a grouped number measured 0.15-1.3 character widths; the
-    /// gap before a separate field measured ~7.7. 2.5 sits in the gulf with
-    /// room on both sides.
-    static let maxTapMergeGapRatio: CGFloat = 2.5
+    /// How wide a gap can be, in character widths, and still be INSIDE one
+    /// field rather than between two.
+    ///
+    /// One constant for both gap decisions — assembling visual lines and
+    /// merging tap targets — because both ask the same question. Measured
+    /// across the fixture corpus through real Vision:
+    ///
+    ///   gaps inside a number   0.14 - 1.67
+    ///   gaps between fields    2.68 - 7.87
+    ///
+    /// 2.2 sits in that gulf with room on both sides. The TIGHTEST field
+    /// boundary (2.68, between two printed codes on a card's bottom row) is
+    /// far under the ~7.7 typical of a number/PIN split, so the margin below
+    /// matters as much as the margin above.
+    static let maxIntraNumberGapRatio: CGFloat = 2.2
 
     static func mergesAsGroupedNumber(_ a: String, _ b: String) -> Bool {
         let ga = groupLength(a)
