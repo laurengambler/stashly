@@ -27,6 +27,7 @@ import BirthdaySection from './components/BirthdaySection.jsx'
 import { loadCards as loadLocalCards } from './lib/storage.js'
 import { deletePhoto } from './lib/photoStorage.js'
 import { themeForCard } from './lib/helpers.js'
+import { luhnSignal, changedFieldNames } from './lib/cardEvents.js'
 import { useAuth } from './lib/auth.jsx'
 import {
   fetchCards,
@@ -37,6 +38,7 @@ import {
 } from './lib/cardsApi.js'
 import { fetchProfile, upsertProfile, ensureProfile } from './lib/profileApi.js'
 import { getBiometricLockEnabled, setBiometricLockEnabled } from './lib/appSettings.js'
+import { matchMerchant } from './lib/merchants.js'
 import { track, identifyUser, ageRange, safeBrand } from './lib/posthog.js'
 
 // Pull the most useful bits out of a Supabase/PostgrestError so we can
@@ -286,6 +288,19 @@ export default function App() {
         source: 'manual',
         method: meta.method || 'manual',
         batch_position: meta.batchPosition || 1,
+        // Silent wrong-number signal. scanned_value_edited only catches
+        // mistakes the user NOTICES before saving; a high-confidence
+        // autofill that fails Luhn is a candidate for one that got through.
+        //
+        // Read it PER MERCHANT, never in aggregate: plenty of closed-loop
+        // gift cards are not Luhn-valid by design, so a low pass rate for a
+        // given merchant is that merchant's numbering scheme, not a scanner
+        // problem. It only means something as a change WITHIN one merchant.
+        // merchant_known exists to make that split possible.
+        number_luhn_valid: luhnSignal(saved),
+        // Canonical name from the known-merchant list, or null. Never the
+        // free text the user typed — that stays on the device.
+        merchant_known: matchMerchant([saved?.merchant])?.name || null,
         // Scan adds also carry prefilled_* / edited_* booleans describing
         // which fields the scanner filled and which of those the user had to
         // correct — the measure of whether scanning actually saves work.
@@ -463,9 +478,17 @@ export default function App() {
   const handleSaveEdit = async (updates) => {
     const id = activeCardId
     if (!id) return
+    const before = cards.find((c) => c.id === id)
     setScreen('detail')
     showToast('Card updated')
-    track('card_edited', { user_id: user?.id })
+    // Which fields changed, by NAME ONLY — never a value. A number
+    // corrected here, days after the card was added, is a scan that was
+    // wrong and got saved anyway: the failure scanned_value_edited cannot
+    // see, because the user did not catch it on the confirm screen.
+    track('card_edited', {
+      user_id: user?.id,
+      fields_changed: changedFieldNames(before, updates),
+    })
     await persistUpdate(id, updates)
   }
 

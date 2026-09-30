@@ -391,5 +391,32 @@
         "numberConfidence": "low"
       }
     }
+  ],
+  "numberValue": [
+    {
+      "name": "grouped number closes up",
+      "in": "8842 6100 5573 2049",
+      "out": "8842610055732049"
+    },
+    {
+      "name": "label is stripped",
+      "in": "CARD#: 41230-8856-2274Q",
+      "out": "4123088562274Q"
+    },
+    {
+      "name": "dashes close up, letter kept",
+      "in": "41230-8856-2274Q",
+      "out": "4123088562274Q"
+    },
+    {
+      "name": "a word beside a number is dropped",
+      "in": "Call 18005550199",
+      "out": "18005550199"
+    },
+    {
+      "name": "fine print yields nothing usable",
+      "in": "Terms and conditions apply",
+      "out": ""
+    }
   ]
 }

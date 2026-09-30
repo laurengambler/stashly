@@ -13,6 +13,7 @@ import {
   detectPin,
   parseCardFields,
   validatedNumber,
+  numberValue,
 } from '../src/lib/scanParse.js'
 import { matchMerchant, normalizeMerchantName } from '../src/lib/merchants.js'
 import { describeCaptureError } from '../src/lib/scanner.js'
@@ -428,6 +429,12 @@ const CASES = JSON.parse(
 test('shared: validatedNumber', () => {
   for (const c of CASES.validatedNumber) {
     assert.equal(validatedNumber(c.in), c.out, c.name)
+  }
+})
+
+test('shared: numberValue', () => {
+  for (const c of CASES.numberValue) {
+    assert.equal(numberValue(c.in), c.out, c.name)
   }
 })
 

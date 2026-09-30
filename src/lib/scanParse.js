@@ -87,7 +87,7 @@ const stripCardLabel = (text) => {
  * carrying no digit at all are labels or words, and are dropped, so
  * "Call 18005550199" yields the number and not "Call18005550199".
  */
-const numberValue = (text) =>
+export const numberValue = (text) =>
   stripCardLabel(String(text || ''))
     .split(/\s+/)
     .filter((t) => /\d/.test(t))

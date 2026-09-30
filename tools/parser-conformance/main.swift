@@ -53,6 +53,16 @@ for c in (root["validatedNumber"] as? [[String: Any]]) ?? [] {
           actual: CardTextParser.validatedNumber(input))
 }
 
+// MARK: numberValue
+for c in (root["numberValue"] as? [[String: Any]]) ?? [] {
+    let name = c["name"] as? String ?? "?"
+    let input = c["in"] as? String ?? ""
+    let expected = c["out"] as? String ?? ""
+    check("numberValue", name, "out",
+          expected: expected,
+          actual: CardTextParser.numberValue(input))
+}
+
 // MARK: segmentLine
 for c in (root["segmentLine"] as? [[String: Any]]) ?? [] {
     let name = c["name"] as? String ?? "?"

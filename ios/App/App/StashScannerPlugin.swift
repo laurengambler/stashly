@@ -276,10 +276,25 @@ public class StashScannerPlugin: CAPPlugin, CAPBridgedPlugin {
                     guard text.contains(where: \.isNumber) else { continue }
                     guard let rect = try? candidate.boundingBox(for: token) else { continue }
                     let bb = rect.boundingBox
-                    boxes.append(TextBox(
+                    let box = TextBox(
                         text: text,
                         rect: CGRect(x: bb.minX, y: 1 - bb.maxY, width: bb.width, height: bb.height)
-                    ))
+                    )
+
+                    // A number printed in groups ("8842 6100 5573 2049")
+                    // arrives as four tokens. Left alone that is four tap
+                    // targets, and tapping one hands back a 4-digit
+                    // fragment rather than the card number. Merge them
+                    // into a single target spanning the whole run.
+                    if let prev = boxes.last,
+                       CardTextParser.mergesAsGroupedNumber(prev.text, text) {
+                        boxes[boxes.count - 1] = TextBox(
+                            text: prev.text + " " + text,
+                            rect: prev.rect.union(box.rect)
+                        )
+                    } else {
+                        boxes.append(box)
+                    }
                 }
             }
 

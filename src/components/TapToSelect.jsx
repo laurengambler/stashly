@@ -32,7 +32,13 @@ export default function TapToSelect({
   if (!photoUrl || !boxes.length || !asking) return null
 
   const handleTap = (box) => {
-    onPick?.(asking, box.text)
+    // onPick returns false when the tapped run did not pass validation —
+    // a tap can land on fine print, and the number field takes a validated
+    // run or nothing. Stay on the same prompt rather than advancing as if
+    // it worked.
+    const accepted = onPick?.(asking, box.text) !== false
+    if (!accepted) return
+
     setPicked((p) => ({ ...p, [asking]: box.text }))
     if (asking === 'number' && askPin) setAsking('pin')
     else finish()

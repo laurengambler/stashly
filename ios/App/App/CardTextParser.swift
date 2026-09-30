@@ -273,6 +273,14 @@ enum CardTextParser {
         return n
     }
 
+    /// Do two adjacent runs read as one grouped number ("8842" + "6100")?
+    /// Used to merge tap targets: a number printed in groups must be ONE
+    /// target, not four, or tapping it yields a 4-digit fragment.
+    static func mergesAsGroupedNumber(_ a: String, _ b: String) -> Bool {
+        let ga = groupLength(a)
+        return ga > 0 && ga == groupLength(b)
+    }
+
     /// Split one visual line into fields at wide gaps, then re-join runs that
     /// are really one grouped number.
     static func segmentLine(_ line: String) -> [String] {

@@ -29,7 +29,11 @@ import {
   CARD_COLORS,
 } from '../lib/helpers.js'
 import { matchMerchant, normalizeMerchantName } from '../lib/merchants.js'
-import { parseCardFields, validatedNumber } from '../lib/scanParse.js'
+import {
+  parseCardFields,
+  validatedNumber,
+  numberValue,
+} from '../lib/scanParse.js'
 import TapToSelect from './TapToSelect.jsx'
 import { savePhoto, newPhotoId } from '../lib/photoStorage.js'
 import { track } from '../lib/posthog.js'
@@ -169,13 +173,33 @@ export default function ConfirmCardScreen({
   const canSave = merchant.trim().length > 0
 
   const handleTapPick = (field, value) => {
-    track('ocr_tap_selected', { field })
     if (field === 'number') {
-      setNumber(validatedNumber(value) || value)
-    } else {
-      setPin(value)
-      setShowPin(true)
+      // The tapped run goes through the SAME guard as a scanned one. It
+      // used to fall back to the raw text when validation failed, which
+      // quietly defeated the guard on this path — and a tapped box can be
+      // anything on the card, including a line of fine print.
+      //
+      // numberValue first, so a number printed in groups closes up to one
+      // run rather than being rejected for containing spaces.
+      const picked = validatedNumber(numberValue(value))
+      if (!picked) {
+        track('ocr_tap_selected', { field, accepted: false })
+        return false // leave the prompt up; that tap was not a card number
+      }
+      track('ocr_tap_selected', { field, accepted: true })
+      setNumber(picked)
+      return true
     }
+
+    const pinPicked = String(value || '').replace(/[^A-Za-z0-9]/g, '')
+    if (!pinPicked) {
+      track('ocr_tap_selected', { field, accepted: false })
+      return false
+    }
+    track('ocr_tap_selected', { field, accepted: true })
+    setPin(pinPicked)
+    setShowPin(true)
+    return true
   }
 
   const commit = async ({ addAnother }) => {

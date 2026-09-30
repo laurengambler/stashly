@@ -13,6 +13,9 @@
 //    grouped        "6011 5000 1234 5678" — one number, single-spaced
 //    wide-grouped   "1234  5678  9012  3456" — one number, wide-spaced
 //    fineprint-only no number at all, to prove the field stays blank
+//    decoy-run      a real 16-digit number AND a 12-digit support/store
+//                   number in the fine print, with NO label to break the
+//                   tie — the case that must NOT autofill
 //
 //  Usage: tools/scan-probe/make-fixtures.sh [outdir]
 //
@@ -139,3 +142,20 @@ render([
        to: outDir.appendingPathComponent("barcode-vs-label.png"),
        height: 900,
        barcode: "012345678905000000411223")
+
+// Two long runs, neither labeled: the real card number and a 12-digit
+// support reference in the fine print. This is what a real card back looks
+// like, and it is the case the other fixtures never exercised — all of
+// them have either a label, a barcode, or exactly one long run, so the
+// "single unambiguous run" path was only ever tested when it was right.
+//
+// Here there is no way to tell which run is the number. The parser must
+// resolve LOW confidence and let the user point at it, rather than filling
+// in a coin flip.
+render([
+    Line("STASH MARKET", size: 40),
+    Line("8842 6100 5573 2049", size: 36, bold: true),
+    Line("Questions? Quote reference 730025518846", size: 21),
+    Line("This card is not redeemable for cash except where", size: 21),
+    Line("required by law. Terms and conditions apply.", size: 21),
+], to: outDir.appendingPathComponent("decoy-run.png"))

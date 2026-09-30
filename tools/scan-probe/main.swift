@@ -105,13 +105,25 @@ func probe(path: String) {
             i = full.index(after: i)
         }
         if let st = start { ranges.append(st..<full.endIndex) }
+        // Mirrors the merging in StashScannerPlugin: grouped runs become
+        // ONE tap target, not one per group.
+        var merged: [(String, CGRect)] = []
         for r in ranges {
             let t = String(full[r]).trimmingCharacters(in: .whitespaces)
             guard t.contains(where: \.isNumber) else { continue }
             guard let bx = try? cand.boundingBox(for: r) else { continue }
             let bb = bx.boundingBox
+            let rect = CGRect(x: bb.minX, y: 1 - bb.maxY, width: bb.width, height: bb.height)
+            if let prev = merged.last,
+               CardTextParser.mergesAsGroupedNumber(prev.0, t) {
+                merged[merged.count - 1] = (prev.0 + " " + t, prev.1.union(rect))
+            } else {
+                merged.append((t, rect))
+            }
+        }
+        for (t, rect) in merged {
             print(String(format: "    x=%.3f y=%.3f w=%.3f h=%.3f  %@",
-                         bb.minX, 1 - bb.maxY, bb.width, bb.height, quoted(t)))
+                         rect.minX, rect.minY, rect.width, rect.height, quoted(t)))
         }
     }
 
