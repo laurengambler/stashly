@@ -43,3 +43,13 @@ jobs:
             exit 1
           fi
           echo "OK: no payload objects passed to console"
+
+  # The Swift parser is the copy that runs on device. It is held to the same
+  # cases as the JS one (test/parser-cases.json), so a rule changed in one
+  # and not the other fails here instead of silently on a phone.
+  swift-parser:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift parser conformance
+        run: tools/parser-conformance/run.sh

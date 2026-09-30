@@ -46,3 +46,14 @@ for the parsing rules, and covers `src/lib/scanParse.js`. This tool covers the
 half the JS tests cannot reach: what **Vision itself** hands the parser for a
 given image. Use the tests for rules, and this for "why did that photo do
 that?".
+
+## Sibling tool: parser-conformance
+
+[`tools/parser-conformance`](../parser-conformance/) asserts
+[`test/parser-cases.json`](../../test/parser-cases.json) against the Swift
+parser. `npm run test:swift` runs it; `npm run test:all` runs both halves.
+
+The two tools answer different questions. This one answers "what did Vision
+hand the parser for this image?" — it needs a real photo. That one answers
+"do the JS and Swift parsers agree on the rules?" — it needs no image and
+runs in CI.

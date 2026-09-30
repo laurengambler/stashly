@@ -406,3 +406,48 @@ test('a label still beats a barcode, and stays high confidence', () => {
   assert.equal(r.number, '4123088562274Q')
   assert.equal(r.numberConfidence, 'high')
 })
+
+// =====================================================================
+// SHARED CONFORMANCE CASES — test/parser-cases.json
+//
+// This same file is asserted against the Swift parser by
+// tools/parser-conformance. One case list, two implementations: they
+// cannot drift in what they are tested on, only in whether they pass.
+//
+// PUT NEW PARSER CASES IN THE JSON, not here. The hand-written tests
+// above predate the shared file and assert a few JS-only extras
+// (rejectedNumber, substring checks); anything that describes a PARSING
+// RULE belongs in the JSON so the device parser is held to it too.
+// =====================================================================
+
+import { readFileSync } from 'node:fs'
+const CASES = JSON.parse(
+  readFileSync(new URL('./parser-cases.json', import.meta.url), 'utf8')
+)
+
+test('shared: validatedNumber', () => {
+  for (const c of CASES.validatedNumber) {
+    assert.equal(validatedNumber(c.in), c.out, c.name)
+  }
+})
+
+test('shared: segmentLine', () => {
+  for (const c of CASES.segmentLine) {
+    assert.deepEqual(segmentLine(c.in), c.out, c.name)
+  }
+})
+
+test('shared: detectPin', () => {
+  for (const c of CASES.detectPin) {
+    assert.equal(detectPin(c.lines, c.exclude), c.out, c.name)
+  }
+})
+
+test('shared: parseCardFields', () => {
+  for (const c of CASES.parseFields) {
+    const got = parseCardFields(c.lines, c.barcode)
+    for (const [field, expected] of Object.entries(c.expect)) {
+      assert.equal(got[field], expected, `${c.name} -> ${field}`)
+    }
+  }
+})

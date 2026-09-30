@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test 'test/**/*.test.mjs'",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:swift": "tools/parser-conformance/run.sh",
+    "test:all": "npm test && npm run test:swift"
   },
   "dependencies": {
     "@aparajita/capacitor-biometric-auth": "^10.0.0",

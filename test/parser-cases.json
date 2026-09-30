@@ -1,0 +1,395 @@
+{
+  "_comment": [
+    "Shared conformance cases for the card-text parser.",
+    "Read by BOTH test/scanParse.test.mjs (JavaScript, src/lib/scanParse.js) and",
+    "tools/parser-conformance (Swift, ios/App/App/CardTextParser.swift).",
+    "",
+    "The two parsers must agree: the JS one runs in the browser/harness path,",
+    "the Swift one runs on device. A rule changed in one and not the other used",
+    "to fail silently on device only. Keeping the cases in ONE file means a new",
+    "case is automatically asserted against both \u2014 they cannot drift apart in",
+    "what they are tested on, only in whether they pass.",
+    "",
+    "Every number here is synthetic. No real card data in this repo."
+  ],
+  "validatedNumber": [
+    {
+      "name": "raw line text is never a card number",
+      "in": "ACCT#: 70123456 789 0123456",
+      "out": ""
+    },
+    {
+      "name": "number and PIN on one line, unsegmented",
+      "in": "Card #1234567890        18934",
+      "out": ""
+    },
+    {
+      "name": "grouped with spaces intact",
+      "in": "6011 5000 1234 5678",
+      "out": ""
+    },
+    {
+      "name": "fine print",
+      "in": "This card is not redeemable for cash",
+      "out": ""
+    },
+    {
+      "name": "punctuation anywhere",
+      "in": "ACCT#:70123456",
+      "out": ""
+    },
+    {
+      "name": "empty",
+      "in": "",
+      "out": ""
+    },
+    {
+      "name": "plain digits pass",
+      "in": "701234567890123456",
+      "out": "701234567890123456"
+    },
+    {
+      "name": "alphanumeric passes",
+      "in": "AB123456789012",
+      "out": "AB123456789012"
+    },
+    {
+      "name": "outer whitespace trimmed",
+      "in": "  1234567890  ",
+      "out": "1234567890"
+    },
+    {
+      "name": "letters only rejected",
+      "in": "STARBUCKS",
+      "out": ""
+    },
+    {
+      "name": "too short rejected",
+      "in": "12345",
+      "out": ""
+    },
+    {
+      "name": "not mostly digits rejected",
+      "in": "ABCDEFGH1234",
+      "out": ""
+    },
+    {
+      "name": "long enough but too few digits",
+      "in": "AB1234",
+      "out": ""
+    },
+    {
+      "name": "six digits exactly is the floor",
+      "in": "123456",
+      "out": "123456"
+    },
+    {
+      "name": "letters must not outnumber digits",
+      "in": "ABCD123456",
+      "out": "ABCD123456"
+    },
+    {
+      "name": "more letters than digits rejected",
+      "in": "ABCDEFG123456",
+      "out": ""
+    }
+  ],
+  "segmentLine": [
+    {
+      "name": "label plus trailing PIN",
+      "in": "Card #1234567890        18934",
+      "out": [
+        "Card #1234567890",
+        "18934"
+      ]
+    },
+    {
+      "name": "wide-spaced grouping rejoins",
+      "in": "1234  5678  9012  3456",
+      "out": [
+        "1234 5678 9012 3456"
+      ]
+    },
+    {
+      "name": "unequal shapes stay apart",
+      "in": "1234567890   18934",
+      "out": [
+        "1234567890",
+        "18934"
+      ]
+    },
+    {
+      "name": "single spaces are one run",
+      "in": "6011 5000 1234 5678",
+      "out": [
+        "6011 5000 1234 5678"
+      ]
+    }
+  ],
+  "detectPin": [
+    {
+      "name": "labeled inline",
+      "lines": [
+        "STARBUCKS",
+        "PIN: 4821"
+      ],
+      "exclude": "",
+      "out": "4821"
+    },
+    {
+      "name": "label above code",
+      "lines": [
+        "Access Code",
+        "93117"
+      ],
+      "exclude": "",
+      "out": "93117"
+    },
+    {
+      "name": "security code",
+      "lines": [
+        "Security Code 55213"
+      ],
+      "exclude": "",
+      "out": "55213"
+    },
+    {
+      "name": "vague mention is not a PIN",
+      "lines": [
+        "Your PIN protected balance is safe"
+      ],
+      "exclude": "",
+      "out": ""
+    },
+    {
+      "name": "no label, no prefill",
+      "lines": [
+        "STARBUCKS",
+        "4821"
+      ],
+      "exclude": "",
+      "out": ""
+    },
+    {
+      "name": "card number on a PIN line is not a PIN",
+      "lines": [
+        "PIN 6011500012345678"
+      ],
+      "exclude": "6011500012345678",
+      "out": ""
+    }
+  ],
+  "parseFields": [
+    {
+      "name": "number and PIN share a line",
+      "lines": [
+        "Card #1234567890        18934"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "1234567890",
+        "pin": "18934",
+        "numberFromLabel": true,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "the label beats the longest-run heuristic",
+      "lines": [
+        "Card #12345678     987654321"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "12345678",
+        "pin": "",
+        "numberFromLabel": true,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "ACCT# label, one Vision fragment",
+      "lines": [
+        "ACCT#: 70123456 789 0123456"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "701234567890123456",
+        "pin": "",
+        "numberFromLabel": true,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "single-spaced grouping is one number",
+      "lines": [
+        "6011 5000 1234 5678"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "6011500012345678",
+        "pin": "",
+        "numberFromLabel": false,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "wide-spaced grouping is still one number",
+      "lines": [
+        "1234  5678  9012  3456"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "1234567890123456",
+        "pin": "",
+        "numberFromLabel": false,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "a labeled number beats the barcode payload",
+      "lines": [
+        "CARD#: 41230-8856-2274Q   PIN: 4412238"
+      ],
+      "barcode": "012345678905000000411223",
+      "expect": {
+        "number": "4123088562274Q",
+        "pin": "4412238",
+        "numberFromLabel": true,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "alphanumeric number keeps its letter, loses its dashes",
+      "lines": [
+        "CARD#: 41230-8856-2274Q"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "4123088562274Q",
+        "pin": "",
+        "numberFromLabel": true,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "the barcode wins when nothing is labeled",
+      "lines": [
+        "1234567890"
+      ],
+      "barcode": "AB123456789012",
+      "expect": {
+        "number": "AB123456789012",
+        "pin": "",
+        "numberFromLabel": false,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "a barcode does not hide a trailing PIN",
+      "lines": [
+        "Card #1234567890   18934"
+      ],
+      "barcode": "1234567890",
+      "expect": {
+        "number": "1234567890",
+        "pin": "18934",
+        "numberFromLabel": true,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "a labeled PIN beats the trailing-run guess",
+      "lines": [
+        "Card #1234567890   18934",
+        "PIN 7766"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "1234567890",
+        "pin": "7766",
+        "numberFromLabel": true,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "the PIN never duplicates the number",
+      "lines": [
+        "Card #18934   18934"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "",
+        "pin": "",
+        "numberFromLabel": false,
+        "numberConfidence": "low"
+      }
+    },
+    {
+      "name": "a label glued to its number does not leak",
+      "lines": [
+        "ACCT#:70123456789"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "70123456789",
+        "pin": "",
+        "numberFromLabel": true,
+        "numberConfidence": "high"
+      }
+    },
+    {
+      "name": "a word beside a number is dropped, not glued",
+      "lines": [
+        "STASH MARKET 12345678"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "12345678",
+        "pin": "",
+        "numberFromLabel": false,
+        "numberConfidence": "low"
+      }
+    },
+    {
+      "name": "competing runs are low confidence",
+      "lines": [
+        "6011500012345678",
+        "4111111111111111"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "6011500012345678",
+        "pin": "",
+        "numberFromLabel": false,
+        "numberConfidence": "low"
+      }
+    },
+    {
+      "name": "an odd-length run is low confidence",
+      "lines": [
+        "123456789"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "123456789",
+        "pin": "",
+        "numberFromLabel": false,
+        "numberConfidence": "low"
+      }
+    },
+    {
+      "name": "fine print resolves nothing",
+      "lines": [
+        "This card is not redeemable for cash except where required by law.",
+        "For balance visit example.com/balance"
+      ],
+      "barcode": "",
+      "expect": {
+        "number": "",
+        "pin": "",
+        "numberFromLabel": false,
+        "numberConfidence": "low"
+      }
+    }
+  ]
+}
