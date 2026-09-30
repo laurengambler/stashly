@@ -194,6 +194,32 @@ export const updatesToDb = (updates, fullCard = null) => {
 
 // --- Logging ------------------------------------------------------
 
+// Fields whose VALUES must never reach a log, a console, or analytics.
+// On iOS, console output is readable by anyone who can attach to the
+// device, so a payload dump here is a plaintext card-number leak.
+const SENSITIVE_COLUMNS = new Set([
+  'card_number',
+  'pin',
+  'access_code',
+  'barcode_value',
+  'last4',
+])
+
+// Log the SHAPE of a payload — which columns are present and whether each
+// carries a value — without ever logging what the values are. Enough to
+// debug "why did that column not save", which is what the payload dumps
+// were for, with none of the exposure.
+const logShape = (label, payload, count) => {
+  if (!payload) return
+  const shape = {}
+  for (const [k, v] of Object.entries(payload)) {
+    shape[k] = SENSITIVE_COLUMNS.has(k)
+      ? v == null || v === '' ? 'empty' : 'set'
+      : v
+  }
+  console.info(`[${label}]`, count == null ? shape : { count, first: shape })
+}
+
 const logErr = (label, err, extra = {}) => {
   console.error(`[${label}]`, {
     code: err?.code,
@@ -221,7 +247,9 @@ export const fetchCards = async () => {
 
 export const insertCard = async (card, userId) => {
   const payload = cardToInsert(card, userId)
-  console.log('[insertCard] payload →', payload)
+  // NEVER log the payload: it carries card_number and pin in plaintext,
+  // and on iOS console output is readable by anyone with the device.
+  logShape('insertCard', payload)
   const { data, error } = await supabase
     .from('cards')
     .insert(payload)
@@ -237,7 +265,7 @@ export const insertCard = async (card, userId) => {
 export const insertManyCards = async (cards, userId) => {
   if (!cards.length) return []
   const payload = cards.map((c) => cardToInsert(c, userId))
-  console.log('[insertManyCards] payload →', payload)
+  logShape('insertManyCards', payload[0], payload.length)
   const { data, error } = await supabase
     .from('cards')
     .insert(payload)
@@ -252,7 +280,7 @@ export const insertManyCards = async (cards, userId) => {
 export const updateCard = async (id, updates, fullCard = null) => {
   const payload = updatesToDb(updates, fullCard)
   if (!Object.keys(payload).length) return null
-  console.log('[updateCard] id =', id, 'payload →', payload)
+  logShape('updateCard', payload)
   const { data, error } = await supabase
     .from('cards')
     .update(payload)

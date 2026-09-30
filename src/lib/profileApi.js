@@ -119,8 +119,6 @@ export const upsertProfile = async (userId, userEmail, updates) => {
     onboarding_completed: completed,
   }
 
-  console.log('[upsertProfile] payload →', payload)
-
   const { data, error } = await supabase
     .from('profiles')
     .upsert(payload, { onConflict: 'id' })

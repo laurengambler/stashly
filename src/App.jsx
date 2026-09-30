@@ -392,8 +392,7 @@ export default function App() {
     setCards((prev) => prev.filter((c) => c.id !== cardId))
     showToast('Card deleted')
     track('card_deleted', { user_id: user?.id, brand: safeBrand(removed) })
-    if (removed?.frontPhotoId) deletePhoto(removed.frontPhotoId).catch(() => {})
-    if (removed?.backPhotoId) deletePhoto(removed.backPhotoId).catch(() => {})
+
     try {
       await deleteCard(cardId)
     } catch (err) {
@@ -402,7 +401,29 @@ export default function App() {
       try {
         const fresh = await fetchCards()
         setCards(fresh)
-      } catch {}
+      } catch (refetchErr) {
+        // The delete failed AND we could not resync. The list on screen no
+        // longer matches the server, so say so rather than leaving the user
+        // looking at a card that is missing locally but still exists.
+        console.warn('Could not refresh cards after failed delete', refetchErr)
+        showToast('Out of sync — reopen the app')
+      }
+      return // photos are NOT deleted: the card still exists
+    }
+
+    // Only now that the server has confirmed the delete. Doing this before
+    // the round-trip meant a failed delete restored the card by refetch
+    // while its photo blobs were already gone from IndexedDB — the card
+    // came back pointing at images that no longer existed.
+    if (removed?.frontPhotoId) {
+      deletePhoto(removed.frontPhotoId).catch((e) =>
+        console.warn('Could not delete front photo', e)
+      )
+    }
+    if (removed?.backPhotoId) {
+      deletePhoto(removed.backPhotoId).catch((e) =>
+        console.warn('Could not delete back photo', e)
+      )
     }
   }
 
@@ -494,7 +515,15 @@ export default function App() {
   }
 
   const handleToggleBiometricLock = (on) => {
-    setBiometricLockEnabled(on)
+    const { ok } = setBiometricLockEnabled(on)
+    if (!ok) {
+      // The toggle did not persist. Do not leave the switch showing a state
+      // the app will not honour next launch — the lock defaults ON, so a
+      // silently failed "off" is the one that surprises people.
+      showToast("Couldn't save that setting on this device")
+      setBiometricLockEnabledState(getBiometricLockEnabled())
+      return
+    }
     setBiometricLockEnabledState(on)
     track('biometric_lock_toggled', { enabled: !!on })
   }

@@ -360,10 +360,6 @@ export default function AddCardScreen({ onCancel, onSave, editCard = null }) {
         }
 
     try {
-      // Diagnostic: log the exact object being handed off to the
-      // parent (and from there into the Supabase insert) so we can
-      // see every field on the way out.
-      console.log('[AddCardScreen] cardPayload →', cardPayload)
       // Actually awaiting the parent here is what was missing before:
       // without it, a Supabase error caused the modal to hang on
       // "Saving…" forever and the user had no idea why nothing happened.
