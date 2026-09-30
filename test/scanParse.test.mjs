@@ -76,6 +76,35 @@ test('a recognition failure still opens the confirm screen', () => {
   assert.equal(r.reason, 'recognition_failed')
 })
 
+test('every non-cancelled failure carries the underlying message', () => {
+  // capture_failed / capture_error send this as error_message, so a reason
+  // code alone is never the only thing recorded about a live failure.
+  const cases = [
+    'You are missing NSPhotoLibraryAddUsageDescription in your Info.plist file.',
+    'User denied access to photos',
+    'Camera not available while running in Simulator',
+    'Error processing image',
+  ]
+  for (const message of cases) {
+    const r = describeCaptureError(new Error(message))
+    assert.equal(r.detail, message, `detail for ${JSON.stringify(message)}`)
+  }
+})
+
+test('the reported message is length-capped', () => {
+  // Fixed plugin strings today, but an unexpected error must not turn into
+  // an oversized event property.
+  const r = describeCaptureError(new Error('Error processing image ' + 'x'.repeat(500)))
+  assert.equal(r.detail.length, 200)
+})
+
+test('a cancellation reports nothing at all', () => {
+  const r = describeCaptureError(new Error('User cancelled photos app'))
+  assert.equal(r.cancelled, true)
+  assert.equal(r.detail, undefined, 'nothing to report for a deliberate back-out')
+  assert.equal(r.reason, undefined)
+})
+
 // ---------------------------------------------------------------------
 // THE GUARD. The card number field only ever receives a single validated
 // alphanumeric run — never raw recognized line text.

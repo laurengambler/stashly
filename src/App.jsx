@@ -610,6 +610,7 @@ export default function App() {
         <AddCardFlow
           onCancel={() => setScreen('wallet')}
           onSave={handleAddCard}
+          onToast={showToast}
         />
       )}
 

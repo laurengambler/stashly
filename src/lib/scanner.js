@@ -88,6 +88,12 @@ export const describeCaptureError = (err) => {
   const raw = String(err?.message || err?.errorMessage || err || '')
   const msg = raw.toLowerCase()
 
+  // The underlying message, for analytics. These are fixed strings from
+  // @capacitor/camera and our own plugin — not user content — but it is
+  // truncated anyway so an unexpected error carrying a long path or payload
+  // cannot turn into an oversized event property.
+  const detail = raw.slice(0, 200)
+
   // Our own scanLive rejects with code 'cancelled'; Capacitor rejects with
   // "User cancelled photos app".
   if (!raw || err?.code === 'cancelled' || msg.includes('cancel')) {
@@ -100,6 +106,7 @@ export const describeCaptureError = (err) => {
     return {
       blocked: true,
       reason: 'missing_usage_description',
+      detail,
       message:
         "Stashly can't open your photos in this version. Please update to the latest version, or add the card manually below.",
     }
@@ -110,6 +117,7 @@ export const describeCaptureError = (err) => {
     return {
       blocked: true,
       reason: photos ? 'photos_permission_denied' : 'camera_permission_denied',
+      detail,
       message: photos
         ? 'Stashly needs access to your photos. Open Settings › Stashly › Photos, then try again.'
         : 'Stashly needs access to your camera. Open Settings › Stashly › Camera, then try again.',
@@ -120,6 +128,7 @@ export const describeCaptureError = (err) => {
     return {
       blocked: true,
       reason: 'scanner_unavailable',
+      detail,
       message:
         "Scanning isn't available on this device. You can pick a photo instead, or add the card manually below.",
     }
@@ -127,7 +136,7 @@ export const describeCaptureError = (err) => {
 
   // It got far enough to try. Let the confirm screen open with empty fields
   // rather than blocking — the user can still type the card in.
-  return { reason: 'recognition_failed' }
+  return { reason: 'recognition_failed', detail }
 }
 
 // Did the scan surface anything usable? Drives the capture_failed event.

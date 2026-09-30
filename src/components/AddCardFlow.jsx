@@ -20,7 +20,9 @@ import {
 } from '../lib/scanner.js'
 import { track } from '../lib/posthog.js'
 
-export default function AddCardFlow({ onCancel, onSave }) {
+export default function AddCardFlow({ onCancel, onSave, onToast }) {
+  const toast = (m) => onToast?.(m)
+
   const [step, setStep] = useState('capture') // 'capture' | 'confirm' | 'manual'
   const [scan, setScan] = useState(null)
   const [method, setMethod] = useState('scan')
@@ -43,7 +45,13 @@ export default function AddCardFlow({ onCancel, onSave }) {
     try {
       const result = await getResult()
       if (result?.cancelled) return // user backed out — stay on capture
-      if (!scanUsable(result)) track('capture_failed', { method: m })
+      if (!scanUsable(result)) {
+        // It ran and read nothing. Not silent: the confirm screen opens so
+        // the card can still be typed in, and the toast says why it is empty
+        // rather than leaving the user to guess.
+        track('capture_failed', { method: m, reason: 'no_fields_found' })
+        toast("Couldn't read that card — add the details below")
+      }
       setScan(result || {})
       setMethod(m)
       setStep('confirm') // never a dead-end: confirm opens even with empty fields
@@ -56,12 +64,22 @@ export default function AddCardFlow({ onCancel, onSave }) {
       // happened — so stay put and say what went wrong. Swallowing this
       // case is exactly what made "From photos" a dead button in 1.3.
       if (info.blocked) {
-        track('capture_error', { method: m, reason: info.reason })
-        setError(info.message)
+        track('capture_error', {
+          method: m,
+          reason: info.reason,
+          error_message: info.detail,
+        })
+        setError(info.message) // stays on screen after the toast fades
+        toast(info.message)
         return
       }
 
-      track('capture_failed', { method: m, reason: info.reason })
+      track('capture_failed', {
+        method: m,
+        reason: info.reason,
+        error_message: info.detail,
+      })
+      toast("Couldn't read that card — add the details below")
       setScan({})
       setMethod(m)
       setStep('confirm')
@@ -72,8 +90,14 @@ export default function AddCardFlow({ onCancel, onSave }) {
 
   const handleScan = () => runScan(scanLive, 'scan')
 
-  const handlePhotos = () =>
-    runScan(async () => {
+  // Fired the moment the button is tapped, before anything can reject.
+  // This is the event that distinguishes "the tap never registered" from
+  // "the picker refused to open" — the question that took a device report
+  // to answer when this path silently died in 1.3. Pair it with
+  // capture_error / card_added on method:'photos' to see where taps go.
+  const handlePhotos = () => {
+    track('photo_upload_tapped', {})
+    return runScan(async () => {
       let base64 = null
       if (Capacitor.isNativePlatform?.()) {
         const { Camera } = await import('@capacitor/camera')
@@ -91,6 +115,7 @@ export default function AddCardFlow({ onCancel, onSave }) {
       }
       return scanImage(base64)
     }, 'photos')
+  }
 
   const handleSave = async (payload, { addAnother, fields }) => {
     const batchPosition = savedCount + 1
