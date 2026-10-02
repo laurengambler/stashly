@@ -1,5 +1,9 @@
 {
   "appId": "com.getstashly.app",
   "appName": "Stashly",
-  "webDir": "dist"
+  "webDir": "dist",
+  "ios": {
+    "appendUserAgent": "StashlyApp"
+  },
+  "appendUserAgent": "StashlyApp"
 }
