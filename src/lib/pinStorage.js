@@ -20,7 +20,25 @@
 // small; see the note in the module docs for photoStorage's sibling.
 // Everything here is behind this module so that swap is one file.
 
-import { Capacitor } from '@capacitor/core'
+// DEVICE-ONLY PIN STORAGE IS OFF FOR THIS RELEASE.
+//
+// Everything below works and is tested; it is simply not switched on. 1.3.2
+// ships the photo-library fix and the scanning work, and moving where PINs
+// live is a data migration that deserves its own release rather than riding
+// along with unrelated fixes.
+//
+// With this false, PINs behave exactly as they did in 1.3.1: written to the
+// server on insert and update, read back from the row, no device copy, no
+// migration, and no "saved on this device only" label — every one of those
+// is behind this single call, which is why turning it off is one line.
+//
+// TO ENABLE NEXT RELEASE, restore:
+//
+//     import { Capacitor } from '@capacitor/core'
+//     export const pinsAreDeviceOnly = () => !!Capacitor.isNativePlatform?.()
+//
+// and re-read the note below, which still governs WHY it is per-platform.
+export const pinsAreDeviceOnly = () => false
 
 // WHERE THE PIN LIVES DEPENDS ON THE PLATFORM, and it has to.
 //
@@ -37,7 +55,6 @@ import { Capacitor } from '@capacitor/core'
 // So the web keeps PINs on the server, exactly as before this change, and
 // only the app gets device-only storage. One platform getting the stronger
 // guarantee is better than both getting a broken one.
-export const pinsAreDeviceOnly = () => !!Capacitor.isNativePlatform?.()
 
 const DB_NAME = 'stashly_pins'
 const DB_VERSION = 1

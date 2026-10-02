@@ -1,21 +1,52 @@
 // test/pinStorage.test.mjs
-// The contract: in the APP, a PIN never reaches the server. On the WEB it
-// still does, because Safari evicts IndexedDB after 7 days and device-only
-// storage there would be data loss on a timer rather than privacy.
+// WHAT THIS RELEASE ACTUALLY DOES: PINs are saved to the server, exactly as
+// in 1.3.1. Device-only storage is built and tested but switched OFF, so
+// the first test here is the one that matters most — that it is still off.
+// Shipping it on by accident would migrate real users' PINs in a release
+// that says nothing about PINs.
 //
-// These are source-level assertions. cardsApi cannot be imported here — it
-// pulls in the Supabase client and import.meta.env — and the thing worth
-// protecting is structural anyway: that no code path writes a PIN to the
-// server without passing the platform check.
+// The structural assertions below guard the dormant feature so it stays
+// correct until it is enabled. cardsApi cannot be imported here — it pulls
+// in the Supabase client and import.meta.env — so they read the source.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { pinsAreDeviceOnly } from '../src/lib/pinStorage.js'
 
 const SRC = readFileSync(new URL('../src/lib/cardsApi.js', import.meta.url), 'utf8')
 
 // Strip comments so prose about `pin` cannot satisfy or trip an assertion.
 const CODE = SRC.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '')
+
+test('device-only PIN storage is OFF, so PINs save to the server', () => {
+  assert.equal(
+    pinsAreDeviceOnly(),
+    false,
+    'pinsAreDeviceOnly must be false in this release — turning it on migrates real PINs'
+  )
+})
+
+test('with the flag off, the INSERT carries the pin', () => {
+  // The conditional resolves to the server branch, which is 1.3.1 behaviour.
+  const insert = CODE.slice(CODE.indexOf('cardToInsert'), CODE.indexOf('FIELD_MAP'))
+  assert.match(insert, /pin:\s*card\.pin/, 'the insert must still be able to send the pin')
+})
+
+test('with the flag off, an edited pin reaches the server', () => {
+  const upd = CODE.slice(CODE.indexOf('export const updateCard'))
+  assert.match(upd, /payload\.pin\s*=\s*updates\.pin/, 'updateCard must send an edited pin')
+})
+
+test('the migration cannot run while the flag is off', () => {
+  const src = readFileSync(new URL('../src/lib/pinStorage.js', import.meta.url), 'utf8')
+  const hydrate = src.slice(src.indexOf('export const hydratePins'))
+  assert.match(
+    hydrate,
+    /if\s*\(!pinsAreDeviceOnly\(\)\)\s*return/,
+    'hydratePins must return before copying anything when the flag is off'
+  )
+})
 
 test('every pin write to the server is behind the platform check', () => {
   const lines = CODE.split('\n')
