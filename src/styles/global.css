@@ -2189,6 +2189,13 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
    recognized run boxed, so the user points at the number instead of
    correcting a guess. Boxes are positioned in percentages because the
    coordinates arrive normalized to the image. */
+.pw-pin-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink-60);
+}
+
 .pw-tapselect { display: flex; flex-direction: column; gap: 8px; }
 .pw-tapselect-prompt {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;

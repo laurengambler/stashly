@@ -26,6 +26,11 @@ import MigrateCardsModal from './components/MigrateCardsModal.jsx'
 import BirthdaySection from './components/BirthdaySection.jsx'
 import { loadCards as loadLocalCards } from './lib/storage.js'
 import { deletePhoto } from './lib/photoStorage.js'
+import {
+  savePin,
+  deletePin,
+  hydratePins,
+} from './lib/pinStorage.js'
 import { themeForCard } from './lib/helpers.js'
 import { luhnSignal, changedFieldNames } from './lib/cardEvents.js'
 import { useAuth } from './lib/auth.jsx'
@@ -136,8 +141,15 @@ export default function App() {
       let cardsFailed = false
       try {
         const remote = await fetchCards()
+        // PINs live on this device, not the server. This fills them in and
+        // copies down any PIN still held server-side from before the
+        // change. The server copy is left alone here — see pinStorage.
+        const { cards: withPins, migrated } = await hydratePins(remote)
         if (!cancelled) {
-          setCards(remote)
+          setCards(withPins)
+          if (migrated > 0) {
+            track('pins_migrated_to_device', { count: migrated })
+          }
         }
       } catch (err) {
         cardsFailed = true
@@ -277,7 +289,15 @@ export default function App() {
     }
     try {
       const saved = await insertCard(newCard, user.id)
-      setCards((prev) => [saved, ...prev])
+      // insertCard does not send the PIN. Keep it on the device, keyed by
+      // the id Postgres just assigned.
+      try {
+        await savePin(saved.id, newCard.pin)
+      } catch (err) {
+        console.warn('Could not save the PIN on this device', err)
+      }
+      const savedWithPin = { ...saved, pin: (newCard.pin || '').trim() }
+      setCards((prev) => [savedWithPin, ...prev])
       showToast('Card added')
       // source: 'manual' is THE activation event — the north-star funnel
       // counts card_added where source === 'manual'. method segments HOW
@@ -308,7 +328,7 @@ export default function App() {
         // only; no field values are ever sent.
         ...(meta.fields || {}),
       })
-      return saved
+      return savedWithPin
     } catch (err) {
       logSupabaseError('insertCard', err)
       // Toast is intentionally short — full error details go to the
@@ -335,6 +355,14 @@ export default function App() {
         snapshot = prev.find((c) => c.id === cardId) || null
         return prev.map((c) => (c.id === cardId ? { ...c, ...updates } : c))
       })
+      if ('pin' in updates) {
+        try {
+          await savePin(cardId, updates.pin)
+        } catch (err) {
+          console.warn('Could not save the PIN on this device', err)
+          if (!silent) showToast("Couldn't save the PIN on this device")
+        }
+      }
       try {
         await updateCard(cardId, updates, snapshot)
       } catch (err) {
@@ -342,7 +370,8 @@ export default function App() {
         if (!silent) showToast('Save failed: ' + describeSupabaseError(err))
         try {
           const fresh = await fetchCards()
-          setCards(fresh)
+          // Re-attach device PINs: the server rows carry none.
+          setCards((await hydratePins(fresh)).cards)
         } catch (refetchErr) {
           console.warn('Could not refresh cards after failed update', refetchErr)
           showToast('Out of sync — reopen the app')
@@ -422,7 +451,8 @@ export default function App() {
       showToast('Could not delete on the server')
       try {
         const fresh = await fetchCards()
-        setCards(fresh)
+        // Re-attach device PINs: the server rows carry none.
+        setCards((await hydratePins(fresh)).cards)
       } catch (refetchErr) {
         // The delete failed AND we could not resync. The list on screen no
         // longer matches the server, so say so rather than leaving the user
@@ -437,6 +467,9 @@ export default function App() {
     // the round-trip meant a failed delete restored the card by refetch
     // while its photo blobs were already gone from IndexedDB — the card
     // came back pointing at images that no longer existed.
+    deletePin(cardId).catch((e) =>
+      console.warn('Could not delete the device PIN', e)
+    )
     if (removed?.frontPhotoId) {
       deletePhoto(removed.frontPhotoId).catch((e) =>
         console.warn('Could not delete front photo', e)

@@ -97,8 +97,13 @@ export const cardToInsert = (card, userId) => {
     brand: card.brand || 'unknown',
     merchant: card.merchant || '',
     card_number: card.number || null,
-    pin: card.pin || null,
-    access_code: card.accessCode || null,
+    // pin and access_code are NOT sent. A number alone is weak; a number
+    // plus its PIN is spendable, so the PIN lives only on the device (see
+    // lib/pinStorage.js). This function cannot leak what it does not
+    // include — which is why the omission lives here rather than in a
+    // caller that might forget.
+    //
+    // access_code was never populated by any UI: 0 rows carried one.
     last4: card.last4 || null,
     starting_balance: startingBalance,
     current_balance: initialCurrent,
@@ -129,8 +134,10 @@ const FIELD_MAP = {
   brand:         'brand',
   kind:          'kind',
   number:        'card_number',
-  pin:           'pin',
-  accessCode:    'access_code',
+  // pin and accessCode are intentionally absent: fields outside this map
+  // are dropped from updates, so an edit cannot push a PIN to the server
+  // even if a component passes one.
+
   last4:         'last4',
   balance:       'balance',
   startingBalance: 'starting_balance',

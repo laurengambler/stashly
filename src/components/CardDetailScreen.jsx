@@ -274,6 +274,10 @@ function SpendingTracker({ card, onDeduct, onUndo, autoFocus }) {
   )
 }
 
+// The PIN is stored only on this device (lib/pinStorage.js), never on the
+// server, so it does not follow the card to another phone. That is a
+// deliberate trade and the user is told about it rather than left to
+// discover it when a PIN is missing somewhere.
 function PinRow({ pin }) {
   const [revealed, setRevealed] = useState(false)
   if (!pin) {
@@ -310,6 +314,7 @@ function PinRow({ pin }) {
           {revealed ? 'Hide' : 'Reveal'}
         </button>
       </div>
+      <p className="pw-pin-note">PIN saved on this device only</p>
     </div>
   )
 }
