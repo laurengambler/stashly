@@ -20,6 +20,25 @@
 // small; see the note in the module docs for photoStorage's sibling.
 // Everything here is behind this module so that swap is one file.
 
+import { Capacitor } from '@capacitor/core'
+
+// WHERE THE PIN LIVES DEPENDS ON THE PLATFORM, and it has to.
+//
+// In the iOS app, IndexedDB sits in the app container: Safari's 7-day
+// eviction of script-writable storage does not apply, and the data is in
+// device backups. Device-only storage is durable there.
+//
+// On the web build it is NOT. Safari deletes IndexedDB after 7 days
+// without a visit, so a web user who saved a PIN and came back a
+// fortnight later would find it silently gone — and if the server column
+// were already cleared, gone for good. Device-only storage on the web is
+// not privacy, it is data loss on a timer.
+//
+// So the web keeps PINs on the server, exactly as before this change, and
+// only the app gets device-only storage. One platform getting the stronger
+// guarantee is better than both getting a broken one.
+export const pinsAreDeviceOnly = () => !!Capacitor.isNativePlatform?.()
+
 const DB_NAME = 'stashly_pins'
 const DB_VERSION = 1
 const STORE = 'pins'
@@ -118,6 +137,11 @@ export const allPins = async () => {
  */
 export const hydratePins = async (cards) => {
   if (!Array.isArray(cards) || !cards.length) return { cards: cards || [], migrated: 0 }
+
+  // On the web the server row IS the PIN. Do not copy it into storage that
+  // Safari will evict, and do not shadow it with a local copy that may be
+  // older than the server's.
+  if (!pinsAreDeviceOnly()) return { cards, migrated: 0 }
 
   let local = {}
   try {

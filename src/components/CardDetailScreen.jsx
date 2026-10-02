@@ -30,6 +30,7 @@ import {
   newPhotoId,
 } from '../lib/photoStorage.js'
 import { track, safeBrand } from '../lib/posthog.js'
+import { pinsAreDeviceOnly } from '../lib/pinStorage.js'
 
 function StarIcon({ filled, size = 22 }) {
   return (
@@ -314,7 +315,9 @@ function PinRow({ pin }) {
           {revealed ? 'Hide' : 'Reveal'}
         </button>
       </div>
-      <p className="pw-pin-note">PIN saved on this device only</p>
+      {pinsAreDeviceOnly() && (
+        <p className="pw-pin-note">PIN saved on this device only</p>
+      )}
     </div>
   )
 }

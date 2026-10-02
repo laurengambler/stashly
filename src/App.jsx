@@ -30,6 +30,7 @@ import {
   savePin,
   deletePin,
   hydratePins,
+  pinsAreDeviceOnly,
 } from './lib/pinStorage.js'
 import { themeForCard } from './lib/helpers.js'
 import { luhnSignal, changedFieldNames } from './lib/cardEvents.js'
@@ -291,10 +292,12 @@ export default function App() {
       const saved = await insertCard(newCard, user.id)
       // insertCard does not send the PIN. Keep it on the device, keyed by
       // the id Postgres just assigned.
-      try {
-        await savePin(saved.id, newCard.pin)
-      } catch (err) {
-        console.warn('Could not save the PIN on this device', err)
+      if (pinsAreDeviceOnly()) {
+        try {
+          await savePin(saved.id, newCard.pin)
+        } catch (err) {
+          console.warn('Could not save the PIN on this device', err)
+        }
       }
       const savedWithPin = { ...saved, pin: (newCard.pin || '').trim() }
       setCards((prev) => [savedWithPin, ...prev])
@@ -355,7 +358,7 @@ export default function App() {
         snapshot = prev.find((c) => c.id === cardId) || null
         return prev.map((c) => (c.id === cardId ? { ...c, ...updates } : c))
       })
-      if ('pin' in updates) {
+      if (pinsAreDeviceOnly() && 'pin' in updates) {
         try {
           await savePin(cardId, updates.pin)
         } catch (err) {
@@ -467,9 +470,11 @@ export default function App() {
     // the round-trip meant a failed delete restored the card by refetch
     // while its photo blobs were already gone from IndexedDB — the card
     // came back pointing at images that no longer existed.
-    deletePin(cardId).catch((e) =>
-      console.warn('Could not delete the device PIN', e)
-    )
+    if (pinsAreDeviceOnly()) {
+      deletePin(cardId).catch((e) =>
+        console.warn('Could not delete the device PIN', e)
+      )
+    }
     if (removed?.frontPhotoId) {
       deletePhoto(removed.frontPhotoId).catch((e) =>
         console.warn('Could not delete front photo', e)

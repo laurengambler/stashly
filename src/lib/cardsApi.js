@@ -23,6 +23,7 @@
 
 import { supabase } from './supabase.js'
 import { sanitizeCurrencyInput } from './helpers.js'
+import { pinsAreDeviceOnly } from './pinStorage.js'
 
 // --- Helpers ------------------------------------------------------
 
@@ -97,13 +98,15 @@ export const cardToInsert = (card, userId) => {
     brand: card.brand || 'unknown',
     merchant: card.merchant || '',
     card_number: card.number || null,
-    // pin and access_code are NOT sent. A number alone is weak; a number
-    // plus its PIN is spendable, so the PIN lives only on the device (see
-    // lib/pinStorage.js). This function cannot leak what it does not
-    // include — which is why the omission lives here rather than in a
-    // caller that might forget.
+    // In the APP the PIN is never sent: a number alone is weak, a number
+    // plus its PIN is spendable, and it lives on the device instead (see
+    // lib/pinStorage.js). On the WEB it still is sent, because Safari
+    // evicts IndexedDB after 7 days and device-only storage there would be
+    // data loss on a timer rather than privacy.
     //
-    // access_code was never populated by any UI: 0 rows carried one.
+    // access_code is never sent on either: no UI has ever set one, and 0
+    // rows carry a value.
+    ...(pinsAreDeviceOnly() ? {} : { pin: card.pin || null }),
     last4: card.last4 || null,
     starting_balance: startingBalance,
     current_balance: initialCurrent,
@@ -286,6 +289,12 @@ export const insertManyCards = async (cards, userId) => {
 
 export const updateCard = async (id, updates, fullCard = null) => {
   const payload = updatesToDb(updates, fullCard)
+  // FIELD_MAP omits pin so the app can never push one. On the web the
+  // server is the only durable home for it, so it is added back here —
+  // the one place that decision is made, next to the insert path.
+  if (!pinsAreDeviceOnly() && 'pin' in updates) {
+    payload.pin = updates.pin || null
+  }
   if (!Object.keys(payload).length) return null
   logShape('updateCard', payload)
   const { data, error } = await supabase
