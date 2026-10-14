@@ -55,10 +55,15 @@ Known gaps to raise when relevant:
   Turning it on is a data migration and needs its own release.
 - `merchant_unmatched` sends a **user-typed merchant name**, normalized and
   length-capped. It is the only user-authored string that leaves the device.
-- `IONCameraLib.framework` (via `@capacitor/camera`) ships **no
-  `PrivacyInfo.xcprivacy`** and references file-timestamp APIs
-  (`NSURLCreationDateKey`). That is a required-reason API and can trigger
-  ITMS-91053 on upload.
+
+**Resolved 2026-10-13:** `IONCameraLib.framework` (via `@capacitor/camera`)
+ships no `PrivacyInfo.xcprivacy` and references file-timestamp APIs
+(`NSURLCreationDateKey`), which are required-reason APIs. Builds 11 and 12
+both uploaded without an ITMS-91053 "Missing API declaration" email, so
+Apple's validation does not flag it and no app-level privacy manifest is
+needed. Re-check if `@capacitor/camera` updates, if another native
+dependency is added, or if Apple tightens enforcement — the absence of a
+warning is evidence, not a guarantee.
 
 ### Why this rule exists
 
@@ -108,6 +113,10 @@ the photo-library fix is the pattern to follow.
 `src/lib/pinStorage.js` returns `false`, so PINs save to the server exactly
 as they always have. The device-only code behind it is written and tested,
 just not switched on.
+
+**This is the next dev priority** (set 2026-10-13), and it still needs an
+explicit go-ahead before the flag moves — being next in line is not the
+same as being approved to start.
 
 **Do not turn it on without asking.** Turning it on is a data migration
 affecting real users' PINs, not a feature flag flip. When it is raised:
