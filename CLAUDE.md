@@ -67,3 +67,69 @@ caught: card numbers and PINs written to the production console; session
 replay left to a dashboard toggle that would have recorded card photos; and
 PINs made device-only on the web, where Safari evicts the store after seven
 days.
+
+## Release checklist
+
+Before any App Store submission, work through this and report the result of
+each — don't assume, check:
+
+1. **Every new feature fully wired.** Trace each one end to end: native
+   emits it, JS consumes it, the component is imported and rendered, the
+   CSS classes it uses exist. No half-built code, no stubs, no `TODO`.
+2. **Debug flags off.** `ScanLog.enabled` must be `false` — it prints real
+   card numbers and PINs to the Xcode console. Check for any other flag
+   that should not ship enabled.
+3. **Green across the board.** `npm test`, `npm run test:swift`,
+   `npm run lint` (0 errors), and a clean Release build with no errors.
+   Report any warning and say whether it blocks submission.
+4. **Icon sanity.** Every icon in the built bundle must report
+   `hasAlpha: no` — the App Store rejects alpha.
+5. **Bump version and build number.** Build numbers must be unique within a
+   version; a version already released is closed to new builds.
+6. **Remind Lauren to test on her phone via TestFlight BEFORE submitting.**
+   Say which specific things to exercise. A build cannot be swapped after
+   submission without withdrawing it.
+7. **Release manually, never automatically.** She controls when it goes
+   live.
+
+## Ship small
+
+Prefer shipping a finished feature in a small update over holding it back
+to bundle with more. A release that does one thing is easier to test,
+easier to write release notes for, and easier to roll back.
+
+When something is not ready, hold that one thing — do not delay the rest of
+the release for it. Holding the PIN migration out of 1.3.2 while shipping
+the photo-library fix is the pattern to follow.
+
+## Held-back work
+
+**The PIN migration is intentionally off.** `pinsAreDeviceOnly()` in
+`src/lib/pinStorage.js` returns `false`, so PINs save to the server exactly
+as they always have. The device-only code behind it is written and tested,
+just not switched on.
+
+**Do not turn it on without asking.** Turning it on is a data migration
+affecting real users' PINs, not a feature flag flip. When it is raised:
+
+- it needs its own release, not a ride-along
+- **the App Store privacy label will need updating** — PINs stop being
+  collected on the app side
+- the 90-day plan to clear the server column must be scoped to app users,
+  because the web keeps PINs on the server by design and a blanket delete
+  would destroy them
+
+## How I work
+
+Lauren is a solo, non-engineer founder. She owns the product decisions and
+does every click herself.
+
+- **Anything in Xcode or App Store Connect gets numbered, click-by-click
+  steps.** Name the actual menu, button or field — "Product → Archive", not
+  "archive the app". Say what she should expect to see, and roughly how
+  long it takes.
+- Explain what a thing does before why it is built that way.
+- Flag anything irreversible before she does it: submitting a build,
+  deleting data, sending an email to users.
+- Surface the decisions that are genuinely hers — anything touching user
+  data, money, or what users see — rather than quietly picking one.
